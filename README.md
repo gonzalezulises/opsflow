@@ -1,36 +1,137 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OpsFlow — Optimización Operativa Inteligente
 
-## Getting Started
+Plataforma web de diagnóstico, análisis y mejora continua de procesos operativos, contextualizada para Latinoamérica. Transforma un toolkit Excel estático en un workflow guiado, multiusuario, auditable y asistido por IA.
 
-First, run the development server:
+## Stack
+
+- **Frontend**: Next.js 16 (App Router), TypeScript, Tailwind CSS v4, shadcn/ui
+- **Backend**: Server Actions, Drizzle ORM
+- **Base de datos**: Supabase (PostgreSQL)
+- **Auth**: Supabase Auth (magic link)
+- **IA**: OpenAI API con structured outputs
+- **Testing**: Vitest (unit), Playwright (E2E planificado)
+- **CI/CD**: GitHub Actions + Vercel
+
+## Inicio rápido
 
 ```bash
+# Clonar e instalar
+git clone https://github.com/gonzalezulises/opsflow.git
+cd opsflow
+npm install
+
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tus credenciales
+
+# Crear tablas en Supabase
+npm run db:push
+
+# Seed del caso base
+npm run db:seed
+
+# Desarrollo
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Módulos
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| # | Módulo | Descripción |
+|---|--------|-------------|
+| 1 | Contexto del caso | Empresa, sector, proceso, métricas base |
+| 2 | Diagnóstico de madurez | 15 preguntas, escala 1-5, nivel bajo/medio/alto |
+| 3 | VSM | Mapeo de flujo de valor con eficiencia de flujo |
+| 4 | Riesgo contextual | Matriz probabilidad × impacto |
+| 5 | Costo del desperdicio | Cuantificación de fugas económicas |
+| 6 | Priorización | Matriz ponderada de iniciativas |
+| 7 | Plan de 30 días | Acciones, responsables, métricas, contingencias |
+| 8 | Seguimiento semanal | Métricas, tendencias, alertas |
+| 9 | Reporte ejecutivo | Resumen consolidado exportable |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Caso base incluido
 
-## Learn More
+**Alimentos Santa Emilia, C.A.** — Sector alimentos y consumo masivo, proceso pedido a despacho.
+- 210 pedidos semanales, ticket promedio $480 USD
+- Lead time actual: 6.8 días, OTD/OTIF: 62%
+- 6 pasos VSM, 6 riesgos contextuales, 4 fugas de desperdicio, 5 iniciativas
 
-To learn more about Next.js, take a look at the following resources:
+## Modos de cálculo VSM
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **lean_correct** (default): tiempo de valor = solo pasos que agregan valor
+- **compatibility**: replica la lógica del Excel original
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Asistencia IA
 
-## Deploy on Vercel
+Panel lateral por módulo con acciones como:
+- Explicar resultados
+- Resumir hallazgos
+- Detectar inconsistencias
+- Sugerir mejoras y quick wins
+- Generar reporte ejecutivo
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Todas las salidas usan structured outputs con schemas Zod.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+```bash
+npm run dev          # Desarrollo local
+npm run build        # Build de producción
+npm run lint         # ESLint
+npm run typecheck    # TypeScript
+npm run test         # Tests unitarios
+npm run db:push      # Push schema a Supabase
+npm run db:generate  # Generar migraciones
+npm run db:migrate   # Aplicar migraciones
+npm run db:seed      # Seed del caso base
+npm run db:studio    # Drizzle Studio
+```
+
+## Documentación
+
+- [Arquitectura](docs/ARCHITECTURE.md)
+- [Modelo de datos](docs/DATA_MODEL.md)
+- [Diseño de IA](docs/AI_DESIGN.md)
+- [Seguridad](docs/SECURITY.md)
+- [Alcance del producto](docs/PRODUCT_SCOPE.md)
+- [Guía de despliegue](docs/DEPLOY.md)
+- [Testing](docs/TESTING.md)
+- ADRs en [docs/adr/](docs/adr/)
+
+## Estructura del proyecto
+
+```
+src/
+├── app/                    # Rutas Next.js (App Router)
+│   ├── (app)/             # Rutas autenticadas
+│   │   └── dashboard/     # Dashboard, casos, equipo, settings
+│   ├── (public)/          # Landing, login
+│   └── auth/              # Callback de auth
+├── components/
+│   ├── layout/            # Sidebar, theme provider
+│   ├── shared/            # AI panel, componentes compartidos
+│   └── ui/                # shadcn/ui components
+├── features/              # Módulos por dominio
+│   ├── auth/
+│   ├── cases/
+│   ├── diagnostic/
+│   ├── vsm/
+│   ├── risks/
+│   ├── waste/
+│   ├── prioritization/
+│   ├── plan/
+│   ├── tracking/
+│   └── reports/
+├── hooks/                 # Custom hooks
+├── lib/
+│   ├── calculations/      # Motor de cálculos
+│   ├── constants/         # Definiciones de módulos
+│   └── supabase/          # Clientes Supabase
+└── server/
+    ├── actions/           # Server actions
+    ├── ai/                # Cliente OpenAI, schemas, prompts
+    └── db/                # Drizzle schema, seeds, migraciones
+```
+
+## Licencia
+
+Privado. Uso autorizado solo para bootcamps, workshops y consultoría con autorización del autor.

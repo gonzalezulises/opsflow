@@ -1,0 +1,21 @@
+import { RiskMatrix } from "@/features/risks/components/risk-matrix";
+
+export default async function RisksPage({
+  params,
+}: {
+  params: Promise<{ caseId: string }>;
+}) {
+  const { caseId } = await params;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold">Riesgo contextual</h2>
+        <p className="text-sm text-muted-foreground">
+          Identifica y evalúa riesgos por paso del proceso, considerando el contexto operativo
+        </p>
+      </div>
+      <RiskMatrix caseId={caseId} />
+    </div>
+  );
+}
