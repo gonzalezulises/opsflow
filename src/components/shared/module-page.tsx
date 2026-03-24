@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ModuleGuide, type ModuleGuideContent } from "./module-guide";
-import { BookOpen, Wrench, ArrowRight } from "lucide-react";
+import { CASE_MODULES } from "@/lib/constants/modules";
+import { BookOpen, Wrench, ArrowRight, ArrowLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ModulePageProps {
@@ -13,6 +15,13 @@ interface ModulePageProps {
 
 export function ModulePage({ guide, children }: ModulePageProps) {
   const [tab, setTab] = useState<"guide" | "exercise">("guide");
+  const router = useRouter();
+  const params = useParams<{ caseId: string }>();
+  const basePath = `/dashboard/cases/${params.caseId}`;
+
+  const currentIndex = CASE_MODULES.findIndex((m) => m.order + 1 === guide.stepNumber);
+  const prevModule = currentIndex > 0 ? CASE_MODULES[currentIndex - 1] : null;
+  const nextModule = currentIndex < CASE_MODULES.length - 1 ? CASE_MODULES[currentIndex + 1] : null;
 
   return (
     <div className="space-y-6">
@@ -54,7 +63,35 @@ export function ModulePage({ guide, children }: ModulePageProps) {
           </div>
         </div>
       ) : (
-        children
+        <div className="space-y-8">
+          {children}
+
+          <div className="flex items-center justify-between border-t pt-6">
+            {prevModule ? (
+              <Button
+                variant="outline"
+                onClick={() => router.push(`${basePath}/${prevModule.path}`)}
+              >
+                <ArrowLeft className="mr-2 size-4" />
+                {prevModule.shortLabel}
+              </Button>
+            ) : (
+              <div />
+            )}
+
+            {nextModule ? (
+              <Button onClick={() => router.push(`${basePath}/${nextModule.path}`)}>
+                {nextModule.shortLabel}
+                <ChevronRight className="ml-2 size-4" />
+              </Button>
+            ) : (
+              <Button onClick={() => router.push("/dashboard/cases")}>
+                Finalizar
+                <ChevronRight className="ml-2 size-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
