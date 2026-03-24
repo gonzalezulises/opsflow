@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { updateCase } from "@/server/actions/cases";
-import { Loader2, Check } from "lucide-react";
+import { Loader2, Check, Plus, Trash2 } from "lucide-react";
 
 interface CaseData {
   id: string;
@@ -26,18 +26,27 @@ interface CaseContextFormProps {
   caseData: CaseData;
 }
 
+interface CustomMetric {
+  id: string;
+  name: string;
+  value: string;
+  unit: string;
+  description: string;
+}
+
 interface MetricsShape {
+  weeklyVolume?: number;
+  avgTransactionValue?: number;
+  contributionMargin?: number;
+  serviceLevel?: number;
+  leadTime?: number;
+  customMetrics?: CustomMetric[];
+  observations?: string;
+  // Legacy fields for backward compatibility with seed data
   weeklyOrders?: number;
   avgTicket?: number;
   margin?: number;
   otdOtif?: number;
-  leadTime?: number;
-  modifiedOrders?: number;
-  correctedOrders?: number;
-  financialHold?: number;
-  reworkPicking?: number;
-  microOutage?: number;
-  observations?: string;
 }
 
 function parseMetrics(raw: unknown): MetricsShape {
@@ -45,11 +54,45 @@ function parseMetrics(raw: unknown): MetricsShape {
   return {};
 }
 
+function migrateMetrics(m: MetricsShape) {
+  return {
+    weeklyVolume: m.weeklyVolume ?? m.weeklyOrders,
+    avgTransactionValue: m.avgTransactionValue ?? m.avgTicket,
+    contributionMargin: m.contributionMargin ?? m.margin,
+    serviceLevel: m.serviceLevel ?? m.otdOtif,
+    leadTime: m.leadTime,
+    customMetrics: m.customMetrics ?? [],
+    observations: m.observations,
+  };
+}
+
 export function CaseContextForm({ caseData }: CaseContextFormProps) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
-  const metrics = parseMetrics(caseData.metrics);
+  const raw = parseMetrics(caseData.metrics);
+  const metrics = migrateMetrics(raw);
+
+  const [customMetrics, setCustomMetrics] = useState<CustomMetric[]>(
+    metrics.customMetrics ?? []
+  );
+
+  function addCustomMetric() {
+    setCustomMetrics((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: "", value: "", unit: "%", description: "" },
+    ]);
+  }
+
+  function updateCustomMetric(id: string, field: keyof CustomMetric, val: string) {
+    setCustomMetrics((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, [field]: val } : m))
+    );
+  }
+
+  function removeCustomMetric(id: string) {
+    setCustomMetrics((prev) => prev.filter((m) => m.id !== id));
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -57,17 +100,13 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
 
     const form = new FormData(e.currentTarget);
 
-    const updatedMetrics: MetricsShape = {
-      weeklyOrders: Number(form.get("weeklyOrders")) || undefined,
-      avgTicket: Number(form.get("avgTicket")) || undefined,
-      margin: Number(form.get("margin")) || undefined,
-      otdOtif: Number(form.get("otdOtif")) || undefined,
+    const updatedMetrics = {
+      weeklyVolume: Number(form.get("weeklyVolume")) || undefined,
+      avgTransactionValue: Number(form.get("avgTransactionValue")) || undefined,
+      contributionMargin: Number(form.get("contributionMargin")) || undefined,
+      serviceLevel: Number(form.get("serviceLevel")) || undefined,
       leadTime: Number(form.get("leadTime")) || undefined,
-      modifiedOrders: Number(form.get("modifiedOrders")) || undefined,
-      correctedOrders: Number(form.get("correctedOrders")) || undefined,
-      financialHold: Number(form.get("financialHold")) || undefined,
-      reworkPicking: Number(form.get("reworkPicking")) || undefined,
-      microOutage: Number(form.get("microOutage")) || undefined,
+      customMetrics: customMetrics.filter((m) => m.name.trim() !== ""),
       observations: (form.get("observations") as string) || undefined,
     };
 
@@ -118,7 +157,7 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
                 id="sector"
                 name="sector"
                 defaultValue={caseData.sector ?? ""}
-                placeholder="Ej: Alimentos y consumo masivo"
+                placeholder="Ej: Manufactura, Servicios, Salud, Retail..."
               />
             </div>
             <div className="space-y-2">
@@ -127,7 +166,7 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
                 id="processFocus"
                 name="processFocus"
                 defaultValue={caseData.processFocus ?? ""}
-                placeholder="Ej: Pedido a despacho"
+                placeholder="Ej: Pedido a despacho, Admisión a alta, Solicitud a resolución..."
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -153,140 +192,187 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Métricas base</CardTitle>
-            <p className="text-xs text-muted-foreground"><span className="text-destructive">*</span> Requeridas para los cálculos de desperdicio y seguimiento</p>
+            <CardTitle className="text-base">Métricas universales</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              <span className="text-destructive">*</span> Estas 5 métricas aplican a cualquier industria y alimentan los cálculos de desperdicio y seguimiento
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="weeklyOrders">Pedidos semanales <span className="text-destructive">*</span></Label>
-                <p className="text-xs text-muted-foreground">Cantidad promedio de pedidos que se procesan por semana.</p>
-                <Input
-                  id="weeklyOrders"
-                  name="weeklyOrders"
-                  type="number"
-                  required
-                  defaultValue={metrics.weeklyOrders ?? ""}
-                  placeholder="210"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="avgTicket">Ticket promedio (USD) <span className="text-destructive">*</span></Label>
-                <p className="text-xs text-muted-foreground">Valor monetario promedio de cada pedido. Se usa para estimar el impacto económico del desperdicio.</p>
-                <Input
-                  id="avgTicket"
-                  name="avgTicket"
-                  type="number"
-                  required
-                  defaultValue={metrics.avgTicket ?? ""}
-                  placeholder="480"
-                />
-              </div>
+            <div className="space-y-1">
+              <Label htmlFor="weeklyVolume">
+                Volumen semanal de transacciones <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Cantidad promedio de transacciones por semana: pedidos, órdenes de trabajo, tickets, casos, consultas — según tu proceso.
+              </p>
+              <Input
+                id="weeklyVolume"
+                name="weeklyVolume"
+                type="number"
+                required
+                defaultValue={metrics.weeklyVolume ?? ""}
+                placeholder="210"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="margin">Margen de contribución (%) <span className="text-destructive">*</span></Label>
-                <p className="text-xs text-muted-foreground">Porcentaje del ingreso que queda después de costos variables. Es la base para calcular el margen perdido por cada problema.</p>
-                <Input
-                  id="margin"
-                  name="margin"
-                  type="number"
-                  required
-                  defaultValue={metrics.margin ?? ""}
-                  placeholder="22"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="otdOtif">OTD/OTIF actual (%) <span className="text-destructive">*</span></Label>
-                <p className="text-xs text-muted-foreground">On-Time Delivery / On-Time In-Full: porcentaje de pedidos entregados completos y a tiempo. Es la métrica de servicio al cliente más importante.</p>
-                <Input
-                  id="otdOtif"
-                  name="otdOtif"
-                  type="number"
-                  required
-                  defaultValue={metrics.otdOtif ?? ""}
-                  placeholder="62"
-                />
-              </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="avgTransactionValue">
+                Valor promedio por transacción ({caseData.currency}) <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Ingreso o valor económico promedio de cada transacción. Se usa para estimar el impacto monetario del desperdicio.
+              </p>
+              <Input
+                id="avgTransactionValue"
+                name="avgTransactionValue"
+                type="number"
+                required
+                defaultValue={metrics.avgTransactionValue ?? ""}
+                placeholder="480"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="leadTime">Lead time actual (días) <span className="text-destructive">*</span></Label>
-                <p className="text-xs text-muted-foreground">Tiempo total desde que se recibe el pedido hasta que se despacha. Incluye procesamiento + esperas. Es lo que el VSM descompone en detalle.</p>
-                <Input
-                  id="leadTime"
-                  name="leadTime"
-                  type="number"
-                  step="0.1"
-                  required
-                  defaultValue={metrics.leadTime ?? ""}
-                  placeholder="6.8"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="modifiedOrders">Órdenes modificadas (%)</Label>
-                <p className="text-xs text-muted-foreground">Porcentaje de pedidos que se modifican después de ser ingresados. Cada modificación genera retrabajo y esperas adicionales.</p>
-                <Input
-                  id="modifiedOrders"
-                  name="modifiedOrders"
-                  type="number"
-                  defaultValue={metrics.modifiedOrders ?? ""}
-                  placeholder="16"
-                />
-              </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="contributionMargin">
+                Margen de contribución (%) <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Porcentaje del ingreso que queda después de costos variables. Es la base para calcular el margen perdido por cada problema operativo.
+              </p>
+              <Input
+                id="contributionMargin"
+                name="contributionMargin"
+                type="number"
+                required
+                defaultValue={metrics.contributionMargin ?? ""}
+                placeholder="22"
+              />
             </div>
-            <Separator />
-            <p className="text-xs font-medium text-muted-foreground">Métricas complementarias (opcionales)</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="correctedOrders">Pedidos con corrección (%)</Label>
-                <p className="text-xs text-muted-foreground">Porcentaje de pedidos que requieren corrección por errores de datos (cantidad, código, dirección). Distinto de modificación: aquí el error es del ingreso.</p>
-                <Input
-                  id="correctedOrders"
-                  name="correctedOrders"
-                  type="number"
-                  defaultValue={metrics.correctedOrders ?? ""}
-                  placeholder="18"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="financialHold">Hold financiero (%)</Label>
-                <p className="text-xs text-muted-foreground">Porcentaje de pedidos detenidos por falta de aprobación crediticia. Mientras están en hold, el lead time se alarga sin agregar valor.</p>
-                <Input
-                  id="financialHold"
-                  name="financialHold"
-                  type="number"
-                  defaultValue={metrics.financialHold ?? ""}
-                  placeholder="11"
-                />
-              </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="serviceLevel">
+                Nivel de servicio actual (%) <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Porcentaje de cumplimiento al cliente: OTD/OTIF en logística, SLA en servicios, first-pass yield en manufactura, satisfacción en salud.
+              </p>
+              <Input
+                id="serviceLevel"
+                name="serviceLevel"
+                type="number"
+                required
+                defaultValue={metrics.serviceLevel ?? ""}
+                placeholder="62"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="reworkPicking">Retrabajo picking (%)</Label>
-                <p className="text-xs text-muted-foreground">Porcentaje de pedidos que requieren re-preparación en almacén por errores de selección, empaque o cantidades incorrectas.</p>
-                <Input
-                  id="reworkPicking"
-                  name="reworkPicking"
-                  type="number"
-                  defaultValue={metrics.reworkPicking ?? ""}
-                  placeholder="9"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="microOutage">Horas microcorte/mes</Label>
-                <p className="text-xs text-muted-foreground">Horas mensuales de interrupción eléctrica. En Venezuela, los microcortes afectan directamente la producción, los sistemas ERP y la cadena de frío.</p>
-                <Input
-                  id="microOutage"
-                  name="microOutage"
-                  type="number"
-                  defaultValue={metrics.microOutage ?? ""}
-                  placeholder="9"
-                />
-              </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="leadTime">
+                Lead time actual (días) <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Tiempo total de punta a punta del proceso foco. Desde que inicia la solicitud hasta que se entrega el resultado. El VSM lo descompone en detalle.
+              </p>
+              <Input
+                id="leadTime"
+                name="leadTime"
+                type="number"
+                step="0.1"
+                required
+                defaultValue={metrics.leadTime ?? ""}
+                placeholder="6.8"
+              />
             </div>
           </CardContent>
         </Card>
+
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Métricas específicas del sector</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Agrega las métricas propias de tu industria o proceso. Ej: retrabajo picking, hold financiero, tasa de readmisión, tickets reabiertos, etc.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addCustomMetric}>
+                  <Plus className="mr-2 size-4" />
+                  Agregar métrica
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {customMetrics.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Sin métricas específicas aún. Agrega las que sean relevantes para tu sector y proceso.
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={addCustomMetric}>
+                    <Plus className="mr-2 size-4" />
+                    Agregar primera métrica
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {customMetrics.map((metric) => (
+                    <div key={metric.id} className="rounded-lg border p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="grid flex-1 grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Nombre de la métrica</Label>
+                            <Input
+                              value={metric.name}
+                              onChange={(e) => updateCustomMetric(metric.id, "name", e.target.value)}
+                              placeholder="Ej: Retrabajo picking"
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Valor actual</Label>
+                            <Input
+                              value={metric.value}
+                              onChange={(e) => updateCustomMetric(metric.id, "value", e.target.value)}
+                              placeholder="Ej: 9"
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Unidad</Label>
+                            <Input
+                              value={metric.unit}
+                              onChange={(e) => updateCustomMetric(metric.id, "unit", e.target.value)}
+                              placeholder="%, horas, días..."
+                              className="h-8"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="mt-5 size-8"
+                          onClick={() => removeCustomMetric(metric.id)}
+                        >
+                          <Trash2 className="size-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Descripción (para el equipo)</Label>
+                        <Input
+                          value={metric.description}
+                          onChange={(e) => updateCustomMetric(metric.id, "description", e.target.value)}
+                          placeholder="Qué mide, por qué importa, cómo se obtiene"
+                          className="h-8"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="lg:col-span-2">
           <Card>
