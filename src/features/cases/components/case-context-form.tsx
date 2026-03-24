@@ -157,8 +157,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="weeklyOrders">Pedidos semanales</Label>
+                <p className="text-xs text-muted-foreground">Cantidad promedio de pedidos que se procesan por semana.</p>
                 <Input
                   id="weeklyOrders"
                   name="weeklyOrders"
@@ -167,8 +168,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
                   placeholder="210"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="avgTicket">Ticket promedio (USD)</Label>
+                <p className="text-xs text-muted-foreground">Valor monetario promedio de cada pedido. Se usa para estimar el impacto económico del desperdicio.</p>
                 <Input
                   id="avgTicket"
                   name="avgTicket"
@@ -179,8 +181,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="margin">Margen de contribución (%)</Label>
+                <p className="text-xs text-muted-foreground">Porcentaje del ingreso que queda después de costos variables. Es la base para calcular el margen perdido por cada problema.</p>
                 <Input
                   id="margin"
                   name="margin"
@@ -189,8 +192,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
                   placeholder="22"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="otdOtif">OTD/OTIF actual (%)</Label>
+                <p className="text-xs text-muted-foreground">On-Time Delivery / On-Time In-Full: porcentaje de pedidos entregados completos y a tiempo. Es la métrica de servicio al cliente más importante.</p>
                 <Input
                   id="otdOtif"
                   name="otdOtif"
@@ -201,8 +205,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="leadTime">Lead time actual (días)</Label>
+                <p className="text-xs text-muted-foreground">Tiempo total desde que se recibe el pedido hasta que se despacha. Incluye procesamiento + esperas. Es lo que el VSM descompone en detalle.</p>
                 <Input
                   id="leadTime"
                   name="leadTime"
@@ -212,8 +217,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
                   placeholder="6.8"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="modifiedOrders">Órdenes modificadas (%)</Label>
+                <p className="text-xs text-muted-foreground">Porcentaje de pedidos que se modifican después de ser ingresados. Cada modificación genera retrabajo y esperas adicionales.</p>
                 <Input
                   id="modifiedOrders"
                   name="modifiedOrders"
@@ -225,8 +231,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
             </div>
             <Separator />
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="correctedOrders">Pedidos con corrección (%)</Label>
+                <p className="text-xs text-muted-foreground">Porcentaje de pedidos que requieren corrección por errores de datos (cantidad, código, dirección). Distinto de modificación: aquí el error es del ingreso.</p>
                 <Input
                   id="correctedOrders"
                   name="correctedOrders"
@@ -235,8 +242,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
                   placeholder="18"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="financialHold">Hold financiero (%)</Label>
+                <p className="text-xs text-muted-foreground">Porcentaje de pedidos detenidos por falta de aprobación crediticia. Mientras están en hold, el lead time se alarga sin agregar valor.</p>
                 <Input
                   id="financialHold"
                   name="financialHold"
@@ -247,8 +255,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="reworkPicking">Retrabajo picking (%)</Label>
+                <p className="text-xs text-muted-foreground">Porcentaje de pedidos que requieren re-preparación en almacén por errores de selección, empaque o cantidades incorrectas.</p>
                 <Input
                   id="reworkPicking"
                   name="reworkPicking"
@@ -257,8 +266,9 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
                   placeholder="9"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="microOutage">Horas microcorte/mes</Label>
+                <p className="text-xs text-muted-foreground">Horas mensuales de interrupción eléctrica. En Venezuela, los microcortes afectan directamente la producción, los sistemas ERP y la cadena de frío.</p>
                 <Input
                   id="microOutage"
                   name="microOutage"
