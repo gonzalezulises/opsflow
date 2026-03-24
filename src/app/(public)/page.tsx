@@ -1,7 +1,10 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function LandingPage() {
+  // Acceso libre por ahora — redirige directo al dashboard
+  redirect("/dashboard");
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b">
