@@ -27,6 +27,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "Womack & Jones — Lean Thinking, Cap. 1: Value (definir el punto de partida antes de mapear el flujo)",
       url: "https://www.lean.org/lexicon-terms/lean-thinking/",
     },
+    industryTips: [
+      "Petróleo y gas: tu proceso foco podría ser 'Requisición de material a entrega en campo' o 'Solicitud de mantenimiento a ejecución'. Las métricas base incluyen NPT (Non-Productive Time) y disponibilidad de equipos.",
+      "Telecomunicaciones: el equivalente es 'Alta de servicio a activación' o 'Reclamo a resolución'. Métricas clave: tiempo de provisión, first-call resolution, SLA compliance.",
+      "Retail/Ferretería: piensa en 'Orden de compra a estante' o 'Devolución a reposición'. Métricas: fill rate, rotación de inventario, quiebres de stock.",
+      "Seguros: mapea 'Solicitud de póliza a emisión' o 'Aviso de siniestro a pago'. Métricas: tiempo de emisión, ratio de rechazo, costo por siniestro.",
+    ],
   },
 
   diagnostic: {
@@ -55,6 +61,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "CMMI Institute — Capability Maturity Model Integration (base conceptual de modelos de madurez por niveles)",
       url: "https://cmmiinstitute.com/cmmi",
     },
+    industryTips: [
+      "Petróleo y gas: la categoría 'Control' suele ser alta (regulación HSE obliga), pero 'Mejora' tiende a ser baja — los procesos se formalizan por cumplimiento, no por optimización.",
+      "Telecomunicaciones: 'Ejecución' puede puntuar bien (procesos estandarizados por eTOM/ITIL), pero 'Planificación' suele fallar cuando hay silos entre red, comercial y atención.",
+      "Retail: la madurez varía enormemente entre la operación de tienda (informal) y los procesos corporativos (más estructurados). El diagnóstico debe capturar esa brecha.",
+      "Seguros: 'Contexto' (regulación, cumplimiento) suele ser fuerte; 'Mejora continua' tiende a ser débil porque los procesos se perciben como 'regulados e inamovibles'.",
+    ],
   },
 
   vsm: {
@@ -84,6 +96,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "Rother & Shook — Learning to See (el libro fundacional de Value Stream Mapping)",
       url: "https://www.lean.org/store/book/learning-to-see/",
     },
+    industryTips: [
+      "Petróleo y gas: el cuello de botella suele estar en aprobaciones HSE y procurement. Un 'turnaround de planta' con 30 días de preparación y 5 de ejecución tiene eficiencia de flujo ~14% — la mayoría es espera por permisos y materiales.",
+      "Telecomunicaciones: el flujo 'alta a activación' pasa por validación crediticia → asignación de recurso → agenda de instalación. La espera entre asignación y agenda es el equivalente al hold financiero del caso base.",
+      "Retail: en el flujo de reposición, el paso que NO agrega valor pero consume más tiempo suele ser la 'validación de orden de compra' con múltiples firmas. Mapéalo como paso sin valor agregado.",
+      "Seguros: el VSM de un siniestro revela que el 80% del tiempo es espera por documentación del asegurado o aprobación de ajustador. El trabajo real (evaluar, calcular, pagar) toma horas, no semanas.",
+    ],
   },
 
   risks: {
@@ -112,6 +130,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "ISO 31000:2018 — Risk Management Guidelines (marco de referencia para gestión de riesgos)",
       url: "https://www.iso.org/iso-31000-risk-management.html",
     },
+    industryTips: [
+      "Petróleo y gas: los riesgos no son solo operativos — incluyen HSE (seguridad industrial), ambiental y geopolítico. Un corte eléctrico en una planta no es igual que en una oficina. Incluye riesgos de seguridad de procesos (API 754).",
+      "Telecomunicaciones: riesgo de obsolescencia tecnológica y dependencia de proveedor único de infraestructura. Si tu red depende de un solo vendor, ese es un riesgo de alta exposición.",
+      "Retail: el riesgo más subestimado es la merma (shrinkage) — pérdidas por robo, daño o error administrativo. En Venezuela, agrega riesgo de reposición por restricciones de importación.",
+      "Seguros: el riesgo operativo incluye fraude en siniestros y errores de suscripción. La señal temprana suele ser un aumento en el ratio de siniestralidad sin explicación de mercado.",
+    ],
   },
 
   waste: {
@@ -140,6 +164,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "ASQ — Cost of Quality (COQ) methodology (marco para cuantificar costos de no-calidad)",
       url: "https://asq.org/quality-resources/cost-of-quality",
     },
+    industryTips: [
+      "Petróleo y gas: el costo de NPT (Non-Productive Time) en perforación puede ser USD 50K-500K/día. Un retrabajo de picking del caso base (USD cientos) parece pequeño, pero la lógica es la misma: tiempo perdido × costo por unidad de tiempo.",
+      "Telecomunicaciones: el desperdicio principal es el 'truck roll' innecesario — enviar técnico a campo cuando el problema se podía resolver remoto. Costo por visita: USD 80-150. Multiplica por miles de visitas/mes.",
+      "Retail: la merma desconocida (inventario que debería estar pero no está) es un desperdicio silencioso. EPA y ferreterías grandes manejan miles de SKUs — un 2% de merma sobre inventario de USD 1M = USD 20K/mes.",
+      "Seguros: el costo del desperdicio incluye pólizas emitidas con error que requieren endoso, y siniestros reabiertos por documentación incompleta. Cada reapertura cuesta 3-5x el procesamiento original.",
+    ],
   },
 
   prioritization: {
@@ -168,6 +198,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "Eisenhower Matrix + Weighted Scoring Model (combinación de urgencia/importancia con evaluación multi-criterio)",
       url: "https://asq.org/quality-resources/decision-matrix",
     },
+    industryTips: [
+      "Petróleo y gas: la 'factibilidad a 30 días' es crítica — en O&G muchas mejoras requieren parada de planta o permisos HSE que toman meses. Prioriza lo que puedes hacer sin parada.",
+      "Telecomunicaciones: la 'dependencia externa' pesa más aquí — si necesitas cambiar configuración de red o integrar con un vendor, la factibilidad baja drásticamente.",
+      "Retail: en tienda, las mejoras con mayor impacto rápido suelen ser de layout y proceso de picking/reposición. No requieren inversión, solo reorganización.",
+      "Seguros: las iniciativas de digitalización de formularios y eliminación de pasos manuales suelen tener score alto en todas las dimensiones — impacto visible y factibilidad alta.",
+    ],
   },
 
   plan: {
@@ -197,6 +233,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "Deming — PDCA Cycle / Shewhart Cycle (base metodológica del ciclo de mejora continua)",
       url: "https://deming.org/explore/pdsa/",
     },
+    industryTips: [
+      "Petróleo y gas: la métrica líder en O&G suele ser disponibilidad de equipos o cumplimiento de programa de mantenimiento. La contingencia debe considerar ventanas de parada programada.",
+      "Telecomunicaciones: métricas como 'tiempo medio de provisión' o 'NPS de instalación' son ideales para un plan de 30 días. El responsable debe tener autonomía sobre el proceso end-to-end.",
+      "Retail: un quick win clásico es implementar conteo cíclico semanal para reducir merma. Métrica: % de discrepancia inventario físico vs sistema. Meta realista: reducir 50% en 30 días.",
+      "Seguros: automatizar una validación manual (ej: verificación de documentos de siniestro con checklist digital) puede reducir tiempo de proceso 40-60% en 30 días.",
+    ],
   },
 
   tracking: {
@@ -225,6 +267,12 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "Wheeler — Understanding Variation (la referencia para interpretar datos de proceso sin sobre-reaccionar)",
       url: "https://www.spcpress.com/book_understanding_variation.php",
     },
+    industryTips: [
+      "Petróleo y gas: usa los indicadores de seguridad de proceso (API 754 Tier 1-4) como referencia de cómo la industria separa eventos de alta severidad vs. casi-incidentes. El mismo principio aplica a métricas operativas.",
+      "Telecomunicaciones: las métricas de red (disponibilidad, latencia) ya se monitorean en tiempo real — aplica la misma disciplina al proceso operativo. Si ya tienes un NOC, piensa en un 'OOC' (Operations Operations Center).",
+      "Retail: la métrica semanal más reveladora es el fill rate (% de pedidos despachados completos). Una caída de 2 semanas seguidas suele indicar problema de reposición, no de demanda.",
+      "Seguros: monitorea el 'aging' de siniestros abiertos — si el promedio de días abierto sube 2 semanas seguidas, hay un cuello de botella en ajuste o documentación.",
+    ],
   },
 
   report: {
@@ -253,5 +301,11 @@ export const MODULE_GUIDES: Record<string, ModuleGuideContent> = {
       text: "Minto — The Pyramid Principle (estructura de comunicación ejecutiva: conclusión primero, evidencia después)",
       url: "https://www.barbaraminto.com/",
     },
+    industryTips: [
+      "Petróleo y gas: el reporte debe hablar el lenguaje de HSE y operaciones — incluye impacto en seguridad y disponibilidad, no solo en costos. Un gerente de planta responde a 'reducimos riesgo de parada no programada', no solo a 'ahorramos USD X'.",
+      "Telecomunicaciones: enmarca los resultados en términos de experiencia del cliente (NPS, SLA) además de eficiencia interna. El sponsor suele ser VP de Operaciones o de Experiencia del Cliente.",
+      "Retail: el reporte de retail debe incluir impacto en ventas perdidas por quiebre de stock — es el argumento más poderoso para la gerencia comercial.",
+      "Seguros: conecta las mejoras con el ratio combinado (combined ratio). Cada punto de mejora en eficiencia operativa impacta directamente la rentabilidad técnica de la aseguradora.",
+    ],
   },
 };

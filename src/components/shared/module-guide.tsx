@@ -27,6 +27,8 @@ export interface ModuleGuideContent {
     text: string;
     url?: string;
   };
+  /** Analogías por industria para conectar el módulo con sectores reales */
+  industryTips?: string[];
 }
 
 export function ModuleGuide({ content, defaultOpen = true }: { content: ModuleGuideContent; defaultOpen?: boolean }) {
@@ -137,6 +139,23 @@ export function ModuleGuide({ content, defaultOpen = true }: { content: ModuleGu
               )}
             </p>
           </div>
+
+          {content.industryTips && content.industryTips.length > 0 && (
+            <div className="space-y-1.5 md:col-span-2 rounded-lg border border-primary/20 bg-primary/[0.03] p-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Lightbulb className="size-4 text-amber-500" />
+                Aplica a tu sector
+              </div>
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
+                {content.industryTips.map((tip, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="shrink-0 text-amber-500/60">→</span>
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </CardContent>
       )}
     </Card>
