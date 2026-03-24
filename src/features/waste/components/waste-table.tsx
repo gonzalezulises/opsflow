@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { calculateWasteCost, type WasteInput } from "@/lib/calculations/waste";
 import { saveAllWasteItems } from "@/server/actions/waste";
 import { toast } from "sonner";
@@ -129,8 +129,119 @@ export function WasteTable({ caseId, initialItems }: WasteTableProps) {
   const totalMonthly = sorted.reduce((sum, i) => sum + i.totalCostMonthly, 0);
   const topWaste = sorted[0];
 
+  const [showWasteTypes, setShowWasteTypes] = useState(true);
+
   return (
     <div className="space-y-6">
+      {/* Tipos de desperdicio */}
+      <Card className="border-primary/20 bg-primary/[0.02]">
+        <CardHeader
+          className="cursor-pointer select-none pb-3"
+          onClick={() => setShowWasteTypes(!showWasteTypes)}
+        >
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Los 8 tipos de desperdicio (Muda) + Costo de no-calidad</CardTitle>
+            <Button variant="ghost" size="icon" className="size-8">
+              {showWasteTypes ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Taiichi Ohno (Toyota Production System) identificó 7 desperdicios; el 8vo fue agregado posteriormente. Úsalos como guía para identificar problemas en tu proceso.
+          </p>
+        </CardHeader>
+        {showWasteTypes && (
+          <CardContent className="grid gap-4 pt-0 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="destructive" className="text-xs">1</Badge>
+                <p className="text-sm font-semibold">Defectos</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Productos o servicios que no cumplen especificaciones y requieren corrección, retrabajo o descarte.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: pedidos con datos incorrectos, facturas con errores, picking equivocado.</span>
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="destructive" className="text-xs">2</Badge>
+                <p className="text-sm font-semibold">Sobreproducción</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Producir más de lo que el cliente necesita o antes de que lo necesite. Genera inventario, obsolescencia y complejidad.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: preparar pedidos que luego se cancelan, generar reportes que nadie lee.</span>
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge className="text-xs bg-amber-500">3</Badge>
+                <p className="text-sm font-semibold">Esperas</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Tiempo muerto entre pasos del proceso: aprobaciones pendientes, información que no llega, sistemas caídos.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: pedidos en hold financiero, espera por liberación de crédito, cola en despacho.</span>
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge className="text-xs bg-amber-500">4</Badge>
+                <p className="text-sm font-semibold">Transporte</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Movimiento innecesario de materiales, documentos o información entre ubicaciones o sistemas.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: reenviar la misma información por correo, WhatsApp y ERP. Trasladar material entre almacenes.</span>
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">5</Badge>
+                <p className="text-sm font-semibold">Inventario</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Acumulación excesiva de materiales, WIP o información sin procesar. Oculta problemas y consume capital.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: pedidos acumulados sin despachar, stock de empaque que se deteriora, backlog de aprobaciones.</span>
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">6</Badge>
+                <p className="text-sm font-semibold">Movimiento</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Movimiento innecesario de personas: buscar información, caminar entre áreas, cambiar entre sistemas.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: operario buscando la hoja de picking, supervisor verificando manualmente cada despacho.</span>
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">7</Badge>
+                <p className="text-sm font-semibold">Sobreprocesamiento</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Hacer más trabajo del que el cliente necesita: aprobaciones redundantes, controles duplicados, formatos excesivos.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: triple validación de un pedido, imprimir documentos que ya están en el sistema.</span>
+              </p>
+            </div>
+
+            <div className="space-y-1.5 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">8</Badge>
+                <p className="text-sm font-semibold">Talento no utilizado</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                No aprovechar las habilidades, conocimiento o creatividad de las personas. El 8vo desperdicio, agregado posteriormente.
+                <span className="block mt-1 font-medium text-foreground">Ejemplo: operarios expertos haciendo tareas repetitivas que podrían automatizarse, ideas de mejora que nadie escucha.</span>
+              </p>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
