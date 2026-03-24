@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/constants/modules";
@@ -11,9 +12,11 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-50 border-b bg-[#0a1628] text-white">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-          <span className="text-[#4a8fe6]">Ops</span>Flow
-          <span className="hidden text-xs font-normal text-white/50 sm:inline">| IESA Bootcamp</span>
+        <Link href="/" className="flex items-center gap-3">
+          <Image src="/iesa-60-logo.png" alt="IESA 60" width={90} height={32} className="h-8 w-auto" />
+          <span className="border-l border-white/20 pl-3 text-lg font-bold">
+            <span className="text-[#4a8fe6]">Ops</span>Flow
+          </span>
         </Link>
 
         <nav className="flex items-center gap-1">

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,10 +25,8 @@ export default function HomePage() {
         <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-[#2b5dea]/20 blur-3xl" />
         <div className="absolute -bottom-10 -left-10 h-48 w-48 rounded-full bg-[#4a8fe6]/10 blur-2xl" />
         <div className="relative mx-auto max-w-5xl px-6 py-20 sm:py-28">
-          <div className="flex items-center gap-2 mb-6">
-            <Badge variant="secondary" className="bg-white/15 text-white border-white/20 hover:bg-white/20">
-              IESA
-            </Badge>
+          <div className="flex items-center gap-4 mb-6">
+            <Image src="/iesa-60-logo.png" alt="IESA 60" width={120} height={42} className="h-10 w-auto" />
             <Badge variant="secondary" className="bg-white/15 text-white border-white/20 hover:bg-white/20">
               25 y 26 de marzo 2026
             </Badge>
@@ -76,7 +75,7 @@ export default function HomePage() {
       </section>
 
       {/* Facilitador */}
-      <section className="border-b bg-muted/30">
+      <section className="border-b bg-white/60">
         <div className="mx-auto max-w-5xl px-6 py-8">
           <div className="flex items-center gap-4">
             <div className="flex size-14 items-center justify-center rounded-full bg-primary text-xl font-bold text-primary-foreground">
@@ -114,7 +113,7 @@ export default function HomePage() {
       </section>
 
       {/* Agenda */}
-      <section className="bg-muted/30 border-y">
+      <section className="bg-white/60 border-y">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <h2 className="text-2xl font-bold tracking-tight">Agenda</h2>
           <p className="mt-2 text-muted-foreground">2 sesiones, 6 horas académicas, 100% práctico</p>
@@ -234,7 +233,7 @@ export default function HomePage() {
       </section>
 
       {/* Pre-work */}
-      <section className="bg-muted/30 border-y">
+      <section className="bg-white/60 border-y">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <div className="flex items-start gap-4">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
@@ -268,7 +267,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t bg-muted/30 py-6 text-center text-sm text-muted-foreground">
+      <footer className="border-t bg-white/60 py-6 text-center text-sm text-muted-foreground">
         <p>Desarrollo exclusivo para el Bootcamp IESA por <strong className="text-foreground">Ulises González</strong> — 2026</p>
         <p className="mt-1 text-xs">OpsFlow — Optimización operativa inteligente</p>
       </footer>
