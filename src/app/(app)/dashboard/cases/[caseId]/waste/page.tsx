@@ -1,4 +1,6 @@
 import { WasteTable } from "@/features/waste/components/waste-table";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 import { getWasteItems } from "@/server/actions/waste";
 
 export default async function WastePage({
@@ -17,6 +19,7 @@ export default async function WastePage({
           Cuantifica el impacto económico de cada problema operativo
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.waste} />
       <WasteTable caseId={caseId} initialItems={items ?? []} />
     </div>
   );

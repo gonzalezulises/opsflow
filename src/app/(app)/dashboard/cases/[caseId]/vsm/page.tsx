@@ -1,4 +1,6 @@
 import { VSMTable } from "@/features/vsm/components/vsm-table";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 import { getProcessSteps } from "@/server/actions/vsm";
 
 export default async function VSMPage({
@@ -19,6 +21,7 @@ export default async function VSMPage({
           eficiencia de flujo
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.vsm} />
       <VSMTable caseId={caseId} initialSteps={steps} />
     </div>
   );

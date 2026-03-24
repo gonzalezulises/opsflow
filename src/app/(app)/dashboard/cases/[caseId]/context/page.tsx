@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { CaseContextForm } from "@/features/cases/components/case-context-form";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 import { getCase } from "@/server/actions/cases";
 
 export default async function ContextPage({
@@ -24,6 +26,7 @@ export default async function ContextPage({
           Datos generales de la empresa, sector, proceso y métricas base
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.context} />
       <CaseContextForm
         caseData={{
           id: row.id,

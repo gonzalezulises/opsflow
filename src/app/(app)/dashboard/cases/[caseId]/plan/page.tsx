@@ -1,4 +1,6 @@
 import { ActionPlanTable } from "@/features/plan/components/action-plan-table";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 import { getActionItems } from "@/server/actions/plan";
 
 export default async function PlanPage({
@@ -17,6 +19,7 @@ export default async function PlanPage({
           Acciones concretas, responsables, métricas y contingencias
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.plan} />
       <ActionPlanTable caseId={caseId} initialActions={actions ?? []} />
     </div>
   );

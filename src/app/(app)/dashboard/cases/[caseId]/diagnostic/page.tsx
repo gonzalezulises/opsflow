@@ -1,4 +1,6 @@
 import { DiagnosticForm } from "@/features/diagnostic/components/diagnostic-form";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 import {
   getDiagnosticQuestions,
   getDiagnosticResponses,
@@ -28,6 +30,7 @@ export default async function DiagnosticPage({
           agrupadas por categoría
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.diagnostic} />
       <DiagnosticForm
         caseId={caseId}
         questions={questions}

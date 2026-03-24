@@ -1,4 +1,6 @@
 import { ExecutiveReport } from "@/features/reports/components/executive-report";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 
 export default async function ReportPage({
   params,
@@ -15,6 +17,7 @@ export default async function ReportPage({
           Resumen consolidado del caso con todos los hallazgos y recomendaciones
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.report} />
       <ExecutiveReport caseId={caseId} />
     </div>
   );

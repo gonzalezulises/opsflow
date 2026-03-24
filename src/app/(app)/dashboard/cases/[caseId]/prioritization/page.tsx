@@ -1,4 +1,6 @@
 import { PrioritizationMatrix } from "@/features/prioritization/components/prioritization-matrix";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 import { getInitiatives, getPrioritizationWeights } from "@/server/actions/prioritization";
 
 export default async function PrioritizationPage({
@@ -20,6 +22,7 @@ export default async function PrioritizationPage({
           Evalúa y clasifica iniciativas según impacto, factibilidad y esfuerzo
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.prioritization} />
       <PrioritizationMatrix
         caseId={caseId}
         initialInitiatives={initiatives ?? []}

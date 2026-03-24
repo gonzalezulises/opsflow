@@ -1,4 +1,6 @@
 import { WeeklyTracking } from "@/features/tracking/components/weekly-tracking";
+import { ModuleGuide } from "@/components/shared/module-guide";
+import { MODULE_GUIDES } from "@/lib/constants/guides";
 import { getWeeklyMetrics } from "@/server/actions/tracking";
 
 export default async function TrackingPage({
@@ -17,6 +19,7 @@ export default async function TrackingPage({
           Métricas semanales, tendencias y alertas de deterioro
         </p>
       </div>
+      <ModuleGuide content={MODULE_GUIDES.tracking} />
       <WeeklyTracking caseId={caseId} initialMetrics={metrics ?? []} />
     </div>
   );
