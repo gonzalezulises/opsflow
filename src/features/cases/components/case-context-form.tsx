@@ -154,27 +154,30 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Métricas base</CardTitle>
+            <p className="text-xs text-muted-foreground"><span className="text-destructive">*</span> Requeridas para los cálculos de desperdicio y seguimiento</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="weeklyOrders">Pedidos semanales</Label>
+                <Label htmlFor="weeklyOrders">Pedidos semanales <span className="text-destructive">*</span></Label>
                 <p className="text-xs text-muted-foreground">Cantidad promedio de pedidos que se procesan por semana.</p>
                 <Input
                   id="weeklyOrders"
                   name="weeklyOrders"
                   type="number"
+                  required
                   defaultValue={metrics.weeklyOrders ?? ""}
                   placeholder="210"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="avgTicket">Ticket promedio (USD)</Label>
+                <Label htmlFor="avgTicket">Ticket promedio (USD) <span className="text-destructive">*</span></Label>
                 <p className="text-xs text-muted-foreground">Valor monetario promedio de cada pedido. Se usa para estimar el impacto económico del desperdicio.</p>
                 <Input
                   id="avgTicket"
                   name="avgTicket"
                   type="number"
+                  required
                   defaultValue={metrics.avgTicket ?? ""}
                   placeholder="480"
                 />
@@ -182,23 +185,25 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="margin">Margen de contribución (%)</Label>
+                <Label htmlFor="margin">Margen de contribución (%) <span className="text-destructive">*</span></Label>
                 <p className="text-xs text-muted-foreground">Porcentaje del ingreso que queda después de costos variables. Es la base para calcular el margen perdido por cada problema.</p>
                 <Input
                   id="margin"
                   name="margin"
                   type="number"
+                  required
                   defaultValue={metrics.margin ?? ""}
                   placeholder="22"
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="otdOtif">OTD/OTIF actual (%)</Label>
+                <Label htmlFor="otdOtif">OTD/OTIF actual (%) <span className="text-destructive">*</span></Label>
                 <p className="text-xs text-muted-foreground">On-Time Delivery / On-Time In-Full: porcentaje de pedidos entregados completos y a tiempo. Es la métrica de servicio al cliente más importante.</p>
                 <Input
                   id="otdOtif"
                   name="otdOtif"
                   type="number"
+                  required
                   defaultValue={metrics.otdOtif ?? ""}
                   placeholder="62"
                 />
@@ -206,13 +211,14 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="leadTime">Lead time actual (días)</Label>
+                <Label htmlFor="leadTime">Lead time actual (días) <span className="text-destructive">*</span></Label>
                 <p className="text-xs text-muted-foreground">Tiempo total desde que se recibe el pedido hasta que se despacha. Incluye procesamiento + esperas. Es lo que el VSM descompone en detalle.</p>
                 <Input
                   id="leadTime"
                   name="leadTime"
                   type="number"
                   step="0.1"
+                  required
                   defaultValue={metrics.leadTime ?? ""}
                   placeholder="6.8"
                 />
@@ -230,6 +236,7 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
               </div>
             </div>
             <Separator />
+            <p className="text-xs font-medium text-muted-foreground">Métricas complementarias (opcionales)</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="correctedOrders">Pedidos con corrección (%)</Label>
