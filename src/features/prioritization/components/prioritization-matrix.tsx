@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import {
   calculatePrioritizationScore,
   DEFAULT_WEIGHTS,
@@ -145,8 +145,94 @@ export function PrioritizationMatrix({
   const attackCount = scored.filter((s) => s.classification === "Atacar ya").length;
   const designCount = scored.filter((s) => s.classification === "Diseñar").length;
 
+  const [showCriteria, setShowCriteria] = useState(true);
+
   return (
     <div className="space-y-6">
+      {/* Definición de criterios */}
+      <Card className="border-primary/20 bg-primary/[0.02]">
+        <CardHeader
+          className="cursor-pointer select-none pb-3"
+          onClick={() => setShowCriteria(!showCriteria)}
+        >
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Criterios de evaluación — ¿Qué significa cada columna?</CardTitle>
+            <Button variant="ghost" size="icon" className="size-8">
+              {showCriteria ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            </Button>
+          </div>
+        </CardHeader>
+        {showCriteria && (
+          <CardContent className="grid gap-3 pt-0 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge className="text-xs">25%</Badge>
+                <p className="text-sm font-semibold">Impacto en Lead Time</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ¿Cuánto reduce el tiempo total del proceso de punta a punta?
+                <span className="block mt-1">1 = No lo afecta | 3 = Reduce algo | 5 = Reduce significativamente el lead time</span>
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge className="text-xs">25%</Badge>
+                <p className="text-sm font-semibold">Impacto Económico</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ¿Cuánto dinero ahorra o genera? Conecta directamente con el módulo de costo del desperdicio.
+                <span className="block mt-1">1 = Ahorro insignificante | 3 = Ahorro moderado | 5 = Elimina una fuga económica importante</span>
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge className="text-xs">20%</Badge>
+                <p className="text-sm font-semibold">Resiliencia</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ¿Hace al proceso más resistente a fallas, imprevistos y variabilidad? Especialmente relevante en contextos con restricciones externas.
+                <span className="block mt-1">1 = No mejora la resiliencia | 3 = Reduce un punto de vulnerabilidad | 5 = Elimina una dependencia crítica</span>
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge className="text-xs">20%</Badge>
+                <p className="text-sm font-semibold">Factibilidad a 30 días</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ¿Se puede implementar en los próximos 30 días con los recursos actuales? Sin compras grandes, sin aprobaciones externas.
+                <span className="block mt-1">1 = Imposible en 30 días | 3 = Factible con esfuerzo | 5 = Se puede hacer esta semana</span>
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">5% inv.</Badge>
+                <p className="text-sm font-semibold">Esfuerzo</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ¿Cuánto trabajo requiere implementarla? <strong>Se invierte en la fórmula</strong>: menor esfuerzo = mejor score.
+                <span className="block mt-1">1 = Muy poco esfuerzo (mejor) | 3 = Esfuerzo moderado | 5 = Requiere mucho trabajo (peor)</span>
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">5% inv.</Badge>
+                <p className="text-sm font-semibold">Dependencia externa</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ¿Depende de personas, áreas o proveedores fuera de tu control? <strong>Se invierte en la fórmula</strong>: menor dependencia = mejor score.
+                <span className="block mt-1">1 = No depende de nadie (mejor) | 3 = Necesita 1-2 aprobaciones | 5 = Depende de muchos actores (peor)</span>
+              </p>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
