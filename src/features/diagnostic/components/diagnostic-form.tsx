@@ -7,8 +7,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Sparkles, Loader2 } from "lucide-react";
 import { DiagnosticSummary } from "./diagnostic-summary";
 import { saveBulkDiagnosticResponses } from "@/server/actions/diagnostic";
+import { getAIInsight } from "@/server/actions/ai";
+import type { DiagnosticSummary as DiagnosticSummaryType } from "@/server/ai/schemas";
 
 interface DbQuestion {
   id: string;
@@ -99,6 +104,39 @@ export function DiagnosticForm({
     });
   };
 
+  const [aiResult, setAiResult] = useState<DiagnosticSummaryType | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  async function handleAIAnalysis() {
+    const answered = questions.filter((q) => scores[q.id] !== undefined);
+    if (answered.length < 5) {
+      toast.error("Responde al menos 5 preguntas antes de solicitar análisis IA");
+      return;
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+    setAiResult(null);
+
+    const context = questions
+      .map((q) => {
+        const score = scores[q.id];
+        const comment = comments[q.id];
+        return `[${q.category}] ${q.questionText}: ${score !== undefined ? `${score}/5` : "sin responder"}${comment ? ` — "${comment}"` : ""}`;
+      })
+      .join("\n");
+
+    const { data, error } = await getAIInsight("diagnostic_summary", context);
+    setAiLoading(false);
+
+    if (error) {
+      setAiError(error);
+    } else {
+      setAiResult(data as DiagnosticSummaryType);
+    }
+  }
+
   const categories = [...new Set(questions.map((q) => q.category ?? "General"))];
 
   const allScores = questions.map((q) => scores[q.id] ?? 0);
@@ -171,8 +209,111 @@ export function DiagnosticForm({
       </div>
 
       <div className="lg:col-span-1">
-        <div className="sticky top-6">
+        <div className="sticky top-20 space-y-4">
           <DiagnosticSummary scores={allScores} />
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Sparkles className="size-4" />
+                Análisis IA
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                La IA analiza tus respuestas con pensamiento crítico: detecta contradicciones, identifica focos críticos y sugiere quick wins.
+              </p>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleAIAnalysis}
+                disabled={aiLoading}
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    Analizando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 size-4" />
+                    Generar análisis
+                  </>
+                )}
+              </Button>
+
+              {aiError && (
+                <p className="text-sm text-destructive">{aiError}</p>
+              )}
+
+              {aiResult && (
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <Badge variant="outline" className="mb-2">Evaluación general</Badge>
+                    <p className="text-sm leading-relaxed">{aiResult.overallAssessment}</p>
+                  </div>
+
+                  <Separator />
+
+                  {aiResult.criticalFindings.length > 0 && (
+                    <div>
+                      <Badge variant="destructive" className="mb-2">Hallazgos críticos</Badge>
+                      <ul className="space-y-1 text-sm">
+                        {aiResult.criticalFindings.map((f, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="shrink-0 text-destructive">•</span>
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {aiResult.contradictions.length > 0 && (
+                    <div>
+                      <Badge variant="secondary" className="mb-2">Contradicciones detectadas</Badge>
+                      <ul className="space-y-1 text-sm">
+                        {aiResult.contradictions.map((c, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="shrink-0 text-amber-500">⚠</span>
+                            {c}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {aiResult.focusAreas.length > 0 && (
+                    <div>
+                      <Badge className="mb-2">Áreas foco</Badge>
+                      <ul className="space-y-1 text-sm">
+                        {aiResult.focusAreas.map((a, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="shrink-0 text-primary">→</span>
+                            {a}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {aiResult.quickWins.length > 0 && (
+                    <div>
+                      <Badge variant="outline" className="mb-2">Quick wins</Badge>
+                      <ul className="space-y-1 text-sm">
+                        {aiResult.quickWins.map((w, i) => (
+                          <li key={i} className="flex gap-2">
+                            <span className="shrink-0 text-green-600">✓</span>
+                            {w}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
