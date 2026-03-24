@@ -26,7 +26,7 @@ export default function HomePage() {
         <div className="absolute -bottom-10 -left-10 h-48 w-48 rounded-full bg-[#4a8fe6]/10 blur-2xl" />
         <div className="relative mx-auto max-w-5xl px-6 py-20 sm:py-28">
           <div className="flex items-center gap-4 mb-6">
-            <Image src="/iesa-60-logo.png" alt="IESA 60" width={120} height={42} className="h-10 w-auto" />
+            <Image src="/iesa-60-logo.png" alt="IESA 60" width={360} height={126} className="h-28 w-auto" />
             <Badge variant="secondary" className="bg-white/15 text-white border-white/20 hover:bg-white/20">
               25 y 26 de marzo 2026
             </Badge>
@@ -82,7 +82,7 @@ export default function HomePage() {
               UG
             </div>
             <div>
-              <p className="font-semibold">Prof. Ulises González</p>
+              <a href="https://www.linkedin.com/in/ulisesgonzalez/?locale=es_ES" target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline">Prof. Ulises González</a>
               <p className="text-sm text-muted-foreground">Facilitador — Excelencia operativa, Lean y mejora continua</p>
             </div>
           </div>
@@ -268,7 +268,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t bg-white/60 py-6 text-center text-sm text-muted-foreground">
-        <p>Desarrollo exclusivo para el Bootcamp IESA por <strong className="text-foreground">Ulises González</strong> — 2026</p>
+        <p>Desarrollo exclusivo para el Bootcamp IESA por <a href="https://www.linkedin.com/in/ulisesgonzalez/?locale=es_ES" target="_blank" rel="noopener noreferrer" className="font-semibold text-foreground hover:underline">Ulises González</a> — 2026</p>
         <p className="mt-1 text-xs">OpsFlow — Optimización operativa inteligente</p>
       </footer>
     </div>

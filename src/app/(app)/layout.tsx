@@ -8,7 +8,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <footer className="border-t py-4 text-center text-xs text-muted-foreground">
-        Desarrollo exclusivo para el Bootcamp IESA por <strong className="text-foreground">Ulises González</strong> — 2026
+        Desarrollo exclusivo para el Bootcamp IESA por <a href="https://www.linkedin.com/in/ulisesgonzalez/?locale=es_ES" target="_blank" rel="noopener noreferrer" className="font-semibold text-foreground hover:underline">Ulises González</a> — 2026
       </footer>
     </div>
   );
