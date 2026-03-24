@@ -1,4 +1,5 @@
 import { ActionPlanTable } from "@/features/plan/components/action-plan-table";
+import { getActionItems } from "@/server/actions/plan";
 
 export default async function PlanPage({
   params,
@@ -6,6 +7,7 @@ export default async function PlanPage({
   params: Promise<{ caseId: string }>;
 }) {
   const { caseId } = await params;
+  const { data: actions } = await getActionItems(caseId);
 
   return (
     <div className="space-y-6">
@@ -15,7 +17,7 @@ export default async function PlanPage({
           Acciones concretas, responsables, métricas y contingencias
         </p>
       </div>
-      <ActionPlanTable caseId={caseId} />
+      <ActionPlanTable caseId={caseId} initialActions={actions ?? []} />
     </div>
   );
 }

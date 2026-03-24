@@ -16,16 +16,60 @@ import {
 } from "@/components/ui/table";
 import { Plus, AlertTriangle } from "lucide-react";
 import { detectTrends, type WeeklyMetric } from "@/lib/calculations/tracking";
+import { saveAllWeeklyMetrics } from "@/server/actions/tracking";
+import { toast } from "sonner";
 
-const INITIAL_METRICS: (WeeklyMetric & { id: string; notes: string })[] = [
-  { id: "1", weekNumber: 1, leadTime: 6.8, otdOtif: 62, pctOrdersCorrected: 18, pctOrdersRescheduled: 16, reworkPicking: 9, planProgress: 20, notes: "" },
-  { id: "2", weekNumber: 2, leadTime: 6.5, otdOtif: 65, pctOrdersCorrected: 15, pctOrdersRescheduled: 14, reworkPicking: 8, planProgress: 40, notes: "" },
-];
+interface MetricRow extends WeeklyMetric {
+  id: string;
+  notes: string;
+  weekStartDate: string;
+}
 
-export function WeeklyTracking({ caseId }: { caseId: string }) {
-  const [metrics, setMetrics] = useState(INITIAL_METRICS);
+interface WeeklyMetricFromDB {
+  id: string;
+  caseId: string;
+  weekNumber: number;
+  weekStartDate: string | null;
+  leadTime: string | null;
+  otdOtif: string | null;
+  pctOrdersCorrected: string | null;
+  pctOrdersRescheduled: string | null;
+  reworkPicking: string | null;
+  planProgress: string | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
 
-  const weeklyMetrics: WeeklyMetric[] = metrics.map(({ id, notes, ...rest }) => rest);
+function dbToRow(item: WeeklyMetricFromDB): MetricRow {
+  return {
+    id: item.id,
+    weekNumber: item.weekNumber,
+    weekStartDate: item.weekStartDate ?? "",
+    leadTime: Number(item.leadTime ?? 0),
+    otdOtif: Number(item.otdOtif ?? 0),
+    pctOrdersCorrected: Number(item.pctOrdersCorrected ?? 0),
+    pctOrdersRescheduled: Number(item.pctOrdersRescheduled ?? 0),
+    reworkPicking: Number(item.reworkPicking ?? 0),
+    planProgress: Number(item.planProgress ?? 0),
+    notes: item.notes ?? "",
+  };
+}
+
+interface WeeklyTrackingProps {
+  caseId: string;
+  initialMetrics: WeeklyMetricFromDB[];
+}
+
+export function WeeklyTracking({ caseId, initialMetrics }: WeeklyTrackingProps) {
+  const [metrics, setMetrics] = useState<MetricRow[]>(
+    initialMetrics.map(dbToRow),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const weeklyMetrics: WeeklyMetric[] = metrics.map(({ id, notes, weekStartDate, ...rest }) => rest);
   const alerts = detectTrends(weeklyMetrics);
 
   function updateMetric(id: string, field: string, value: string | number) {
@@ -41,6 +85,7 @@ export function WeeklyTracking({ caseId }: { caseId: string }) {
       {
         id: crypto.randomUUID(),
         weekNumber: nextWeek,
+        weekStartDate: "",
         leadTime: 0,
         otdOtif: 0,
         pctOrdersCorrected: 0,
@@ -50,6 +95,31 @@ export function WeeklyTracking({ caseId }: { caseId: string }) {
         notes: "",
       },
     ]);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const payload = metrics.map((m) => ({
+      caseId,
+      weekNumber: m.weekNumber,
+      weekStartDate: m.weekStartDate || undefined,
+      leadTime: String(m.leadTime),
+      otdOtif: String(m.otdOtif),
+      pctOrdersCorrected: String(m.pctOrdersCorrected),
+      pctOrdersRescheduled: String(m.pctOrdersRescheduled),
+      reworkPicking: String(m.reworkPicking),
+      planProgress: String(m.planProgress),
+      notes: m.notes || undefined,
+    }));
+
+    const result = await saveAllWeeklyMetrics(caseId, payload);
+    setSaving(false);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Seguimiento guardado");
+    }
   }
 
   const latest = metrics[metrics.length - 1];
@@ -183,7 +253,9 @@ export function WeeklyTracking({ caseId }: { caseId: string }) {
           <Plus className="mr-2 size-4" />
           Agregar semana
         </Button>
-        <Button>Guardar seguimiento</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando..." : "Guardar seguimiento"}
+        </Button>
       </div>
     </div>
   );

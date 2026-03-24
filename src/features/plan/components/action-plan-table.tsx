@@ -15,6 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
+import { saveAllActionItems } from "@/server/actions/plan";
+import { toast } from "sonner";
 
 type ActionStatus = "pending" | "in_progress" | "completed" | "blocked" | "cancelled";
 
@@ -29,6 +31,42 @@ interface ActionRow {
   targetValue: string;
   contingency: string;
   status: ActionStatus;
+  initiativeId: string | null;
+}
+
+interface ActionItemFromDB {
+  id: string;
+  caseId: string;
+  initiativeId: string | null;
+  actionDescription: string;
+  responsible: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  leadMetric: string | null;
+  baselineValue: string | null;
+  targetValue: string | null;
+  contingency: string | null;
+  status: "pending" | "in_progress" | "completed" | "blocked" | "cancelled";
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+function dbToRow(item: ActionItemFromDB): ActionRow {
+  return {
+    id: item.id,
+    action: item.actionDescription,
+    responsible: item.responsible ?? "",
+    startDate: item.startDate ?? "",
+    endDate: item.endDate ?? "",
+    leadMetric: item.leadMetric ?? "",
+    baselineValue: item.baselineValue ?? "",
+    targetValue: item.targetValue ?? "",
+    contingency: item.contingency ?? "",
+    status: item.status,
+    initiativeId: item.initiativeId,
+  };
 }
 
 const STATUS_OPTIONS: { value: ActionStatus; label: string }[] = [
@@ -57,16 +95,16 @@ function statusBadge(status: ActionStatus) {
   return <Badge variant={variants[status]}>{labels[status]}</Badge>;
 }
 
-const INITIAL_ACTIONS: ActionRow[] = [
-  { id: "1", action: "Implementar checklist obligatorio de pedido", responsible: "Jefe Comercial", startDate: "", endDate: "", leadMetric: "% pedidos con error", baselineValue: "18", targetValue: "8", contingency: "Revisión por supervisor", status: "pending" },
-  { id: "2", action: "Definir ventana diaria de liberación financiera", responsible: "Gerente de Crédito", startDate: "", endDate: "", leadMetric: "% pedidos en hold", baselineValue: "11", targetValue: "5", contingency: "Escalamiento automático", status: "pending" },
-  { id: "3", action: "Implementar semáforo de materiales críticos", responsible: "Planificador", startDate: "", endDate: "", leadMetric: "Quiebres/mes", baselineValue: "4", targetValue: "1", contingency: "Proveedor alternativo local", status: "pending" },
-  { id: "4", action: "Congelar cambios de prioridad después del corte", responsible: "Gerente de Operaciones", startDate: "", endDate: "", leadMetric: "% órdenes reprogramadas", baselineValue: "16", targetValue: "5", contingency: "Aprobación gerencial", status: "pending" },
-  { id: "5", action: "Entrenar back-up de supervisor de picking", responsible: "Supervisor de Almacén", startDate: "", endDate: "", leadMetric: "% retrabajo picking", baselineValue: "9", targetValue: "4", contingency: "Soporte de turno anterior", status: "pending" },
-];
+interface ActionPlanTableProps {
+  caseId: string;
+  initialActions: ActionItemFromDB[];
+}
 
-export function ActionPlanTable({ caseId }: { caseId: string }) {
-  const [actions, setActions] = useState<ActionRow[]>(INITIAL_ACTIONS);
+export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps) {
+  const [actions, setActions] = useState<ActionRow[]>(
+    initialActions.map(dbToRow),
+  );
+  const [saving, setSaving] = useState(false);
 
   function updateAction(id: string, field: keyof ActionRow, value: string) {
     setActions((prev) =>
@@ -88,12 +126,39 @@ export function ActionPlanTable({ caseId }: { caseId: string }) {
         targetValue: "",
         contingency: "",
         status: "pending" as ActionStatus,
+        initiativeId: null,
       },
     ]);
   }
 
   function removeAction(id: string) {
     setActions((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const payload = actions.map((a) => ({
+      caseId,
+      initiativeId: a.initiativeId,
+      actionDescription: a.action,
+      responsible: a.responsible || undefined,
+      startDate: a.startDate || undefined,
+      endDate: a.endDate || undefined,
+      leadMetric: a.leadMetric || undefined,
+      baselineValue: a.baselineValue || undefined,
+      targetValue: a.targetValue || undefined,
+      contingency: a.contingency || undefined,
+      status: a.status,
+    }));
+
+    const result = await saveAllActionItems(caseId, payload);
+    setSaving(false);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Plan guardado");
+    }
   }
 
   const completedCount = actions.filter((a) => a.status === "completed").length;
@@ -200,7 +265,9 @@ export function ActionPlanTable({ caseId }: { caseId: string }) {
           <Plus className="mr-2 size-4" />
           Agregar acción
         </Button>
-        <Button>Guardar plan</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando..." : "Guardar plan"}
+        </Button>
       </div>
     </div>
   );

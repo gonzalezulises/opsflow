@@ -1,4 +1,8 @@
 import { DiagnosticForm } from "@/features/diagnostic/components/diagnostic-form";
+import {
+  getDiagnosticQuestions,
+  getDiagnosticResponses,
+} from "@/server/actions/diagnostic";
 
 export default async function DiagnosticPage({
   params,
@@ -6,6 +10,14 @@ export default async function DiagnosticPage({
   params: Promise<{ caseId: string }>;
 }) {
   const { caseId } = await params;
+
+  const [questionsResult, responsesResult] = await Promise.all([
+    getDiagnosticQuestions(caseId),
+    getDiagnosticResponses(caseId),
+  ]);
+
+  const questions = questionsResult.data ?? [];
+  const responses = responsesResult.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -16,7 +28,11 @@ export default async function DiagnosticPage({
           agrupadas por categoría
         </p>
       </div>
-      <DiagnosticForm caseId={caseId} />
+      <DiagnosticForm
+        caseId={caseId}
+        questions={questions}
+        initialResponses={responses}
+      />
     </div>
   );
 }

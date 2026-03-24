@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { CaseContextForm } from "@/features/cases/components/case-context-form";
+import { getCase } from "@/server/actions/cases";
 
 export default async function ContextPage({
   params,
@@ -6,6 +8,13 @@ export default async function ContextPage({
   params: Promise<{ caseId: string }>;
 }) {
   const { caseId } = await params;
+  const result = await getCase(caseId);
+
+  if (result.error || !result.data) {
+    notFound();
+  }
+
+  const row = result.data;
 
   return (
     <div className="space-y-6">
@@ -15,7 +24,19 @@ export default async function ContextPage({
           Datos generales de la empresa, sector, proceso y métricas base
         </p>
       </div>
-      <CaseContextForm caseId={caseId} />
+      <CaseContextForm
+        caseData={{
+          id: row.id,
+          name: row.name,
+          companyName: row.companyName,
+          sector: row.sector,
+          processFocus: row.processFocus,
+          currency: row.currency,
+          locale: row.locale,
+          status: row.status,
+          metrics: row.metrics,
+        }}
+      />
     </div>
   );
 }

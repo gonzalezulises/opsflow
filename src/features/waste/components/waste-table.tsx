@@ -15,18 +15,43 @@ import {
 } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
 import { calculateWasteCost, type WasteInput } from "@/lib/calculations/waste";
+import { saveAllWasteItems } from "@/server/actions/waste";
+import { toast } from "sonner";
 
 interface WasteRow extends WasteInput {
   id: string;
   problemDescription: string;
 }
 
-const INITIAL_WASTE: WasteRow[] = [
-  { id: "1", problemDescription: "Corrección de pedidos", frequencyPerWeek: 38, minutesLostPerEvent: 25, hourlyLaborCost: 8, unitsAffected: 5, unitMargin: 105.6 },
-  { id: "2", problemDescription: "Pedidos en hold financiero", frequencyPerWeek: 23, minutesLostPerEvent: 45, hourlyLaborCost: 10, unitsAffected: 3, unitMargin: 105.6 },
-  { id: "3", problemDescription: "Re-trabajo de picking", frequencyPerWeek: 19, minutesLostPerEvent: 35, hourlyLaborCost: 7, unitsAffected: 2, unitMargin: 105.6 },
-  { id: "4", problemDescription: "Quiebre de empaque", frequencyPerWeek: 4, minutesLostPerEvent: 120, hourlyLaborCost: 12, unitsAffected: 8, unitMargin: 105.6 },
-];
+interface WasteItemFromDB {
+  id: string;
+  caseId: string;
+  problemDescription: string;
+  frequencyPerWeek: string | null;
+  minutesLostPerEvent: string | null;
+  hourlyLaborCost: string | null;
+  unitsAffected: string | null;
+  unitMargin: string | null;
+  laborCostMonthly: string | null;
+  marginLostMonthly: string | null;
+  totalCostMonthly: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+function dbToRow(item: WasteItemFromDB): WasteRow {
+  return {
+    id: item.id,
+    problemDescription: item.problemDescription,
+    frequencyPerWeek: Number(item.frequencyPerWeek ?? 0),
+    minutesLostPerEvent: Number(item.minutesLostPerEvent ?? 0),
+    hourlyLaborCost: Number(item.hourlyLaborCost ?? 0),
+    unitsAffected: Number(item.unitsAffected ?? 0),
+    unitMargin: Number(item.unitMargin ?? 0),
+  };
+}
 
 function formatCurrency(n: number): string {
   return new Intl.NumberFormat("es-VE", {
@@ -37,8 +62,16 @@ function formatCurrency(n: number): string {
   }).format(n);
 }
 
-export function WasteTable({ caseId }: { caseId: string }) {
-  const [items, setItems] = useState<WasteRow[]>(INITIAL_WASTE);
+interface WasteTableProps {
+  caseId: string;
+  initialItems: WasteItemFromDB[];
+}
+
+export function WasteTable({ caseId, initialItems }: WasteTableProps) {
+  const [items, setItems] = useState<WasteRow[]>(
+    initialItems.map(dbToRow),
+  );
+  const [saving, setSaving] = useState(false);
 
   function updateItem(id: string, field: keyof WasteRow, value: string | number) {
     setItems((prev) =>
@@ -63,6 +96,28 @@ export function WasteTable({ caseId }: { caseId: string }) {
 
   function removeItem(id: string) {
     setItems((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const payload = items.map((item) => ({
+      caseId,
+      problemDescription: item.problemDescription,
+      frequencyPerWeek: item.frequencyPerWeek,
+      minutesLostPerEvent: item.minutesLostPerEvent,
+      hourlyLaborCost: item.hourlyLaborCost,
+      unitsAffected: item.unitsAffected,
+      unitMargin: item.unitMargin,
+    }));
+
+    const result = await saveAllWasteItems(caseId, payload);
+    setSaving(false);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Costos guardados");
+    }
   }
 
   const calculated = items.map((item) => {
@@ -170,7 +225,9 @@ export function WasteTable({ caseId }: { caseId: string }) {
           <Plus className="mr-2 size-4" />
           Agregar problema
         </Button>
-        <Button>Guardar costos</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando..." : "Guardar costos"}
+        </Button>
       </div>
     </div>
   );

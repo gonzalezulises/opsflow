@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { Plus, Trash2 } from "lucide-react";
 import { calculateExposure, getRiskLevel, getRiskLevelLabel } from "@/lib/calculations/risk";
+import { saveAllRiskItems } from "@/server/actions/risks";
+import { toast } from "sonner";
 
 interface RiskRow {
   id: string;
@@ -28,14 +30,36 @@ interface RiskRow {
   additionalAction: string;
 }
 
-const INITIAL_RISKS: RiskRow[] = [
-  { id: "1", riskDescription: "Pedido con datos incompletos", riskType: "Disciplina comercial", probability: 4, impact: 4, earlySignals: "", mitigations: "", additionalAction: "" },
-  { id: "2", riskDescription: "Liberación manual por presión", riskType: "Gobierno", probability: 3, impact: 4, earlySignals: "", mitigations: "", additionalAction: "" },
-  { id: "3", riskDescription: "Quiebre de empaque importado", riskType: "Reposición", probability: 4, impact: 5, earlySignals: "", mitigations: "", additionalAction: "" },
-  { id: "4", riskDescription: "Microcorte en turno", riskType: "Energía", probability: 3, impact: 5, earlySignals: "", mitigations: "", additionalAction: "" },
-  { id: "5", riskDescription: "Dependencia de supervisor clave", riskType: "Talento", probability: 4, impact: 4, earlySignals: "", mitigations: "", additionalAction: "" },
-  { id: "6", riskDescription: "Camión tercerizado llega tarde", riskType: "Proveedor externo", probability: 3, impact: 4, earlySignals: "", mitigations: "", additionalAction: "" },
-];
+interface DBRiskItem {
+  id: string;
+  caseId: string;
+  processStepId: string | null;
+  riskDescription: string;
+  riskType: string | null;
+  probability: number;
+  impact: number;
+  exposure: string | null;
+  earlySignals: string | null;
+  mitigations: string | null;
+  additionalAction: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+function dbToRow(item: DBRiskItem): RiskRow {
+  return {
+    id: item.id,
+    riskDescription: item.riskDescription,
+    riskType: item.riskType ?? "Otro",
+    probability: item.probability,
+    impact: item.impact,
+    earlySignals: item.earlySignals ?? "",
+    mitigations: item.mitigations ?? "",
+    additionalAction: item.additionalAction ?? "",
+  };
+}
 
 const RISK_TYPES = [
   "Disciplina comercial", "Gobierno", "Reposición", "Energía",
@@ -49,8 +73,11 @@ function exposureBadge(exposure: number) {
   return <Badge variant={variant}>{exposure} — {label}</Badge>;
 }
 
-export function RiskMatrix({ caseId }: { caseId: string }) {
-  const [risks, setRisks] = useState<RiskRow[]>(INITIAL_RISKS);
+export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRisks: DBRiskItem[] }) {
+  const [risks, setRisks] = useState<RiskRow[]>(
+    initialRisks.length > 0 ? initialRisks.map(dbToRow) : [],
+  );
+  const [isPending, startTransition] = useTransition();
 
   function updateRisk(id: string, field: keyof RiskRow, value: string | number) {
     setRisks((prev) =>
@@ -76,6 +103,27 @@ export function RiskMatrix({ caseId }: { caseId: string }) {
 
   function removeRisk(id: string) {
     setRisks((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  function handleSave() {
+    startTransition(async () => {
+      const dbItems = risks.map((r) => ({
+        caseId,
+        riskDescription: r.riskDescription,
+        riskType: r.riskType,
+        probability: r.probability,
+        impact: r.impact,
+        earlySignals: r.earlySignals,
+        mitigations: r.mitigations,
+        additionalAction: r.additionalAction,
+      }));
+      const result = await saveAllRiskItems(caseId, dbItems);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Riesgos guardados");
+      }
+    });
   }
 
   const sorted = [...risks]
@@ -195,7 +243,9 @@ export function RiskMatrix({ caseId }: { caseId: string }) {
           <Plus className="mr-2 size-4" />
           Agregar riesgo
         </Button>
-        <Button>Guardar riesgos</Button>
+        <Button onClick={handleSave} disabled={isPending}>
+          {isPending ? "Guardando..." : "Guardar riesgos"}
+        </Button>
       </div>
     </div>
   );

@@ -1,9 +1,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import { FileText, Copy } from "lucide-react";
+import { getTemplates } from "@/server/actions/cases";
+import { CreateFromTemplateButton } from "@/features/cases/components/create-from-template-button";
+import { CreateBlankButton } from "@/features/cases/components/create-blank-button";
 
-export default function NewCasePage() {
+export default async function NewCasePage() {
+  const templatesResult = await getTemplates();
+  const templates = templatesResult.data ?? [];
+  const baseTemplate = templates[0];
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
@@ -14,35 +19,38 @@ export default function NewCasePage() {
       </div>
 
       <div className="grid gap-4">
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
-                <Copy className="size-5 text-primary" />
+        {baseTemplate && (
+          <Card className="transition-colors hover:bg-muted/50">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+                  <Copy className="size-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Desde caso base</CardTitle>
+                  <CardDescription>
+                    {baseTemplate.companyName ?? baseTemplate.name} — {baseTemplate.processFocus ?? "Proceso general"}
+                  </CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-base">Desde caso base</CardTitle>
-                <CardDescription>
-                  Alimentos Santa Emilia — Pedido a Despacho
-                </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Usa el caso base del toolkit con datos pre-cargados: 6 pasos VSM,
+                6 riesgos, 4 problemas de desperdicio y 5 iniciativas.
+                Ideal para bootcamps y workshops.
+              </p>
+              <div className="mt-4">
+                <CreateFromTemplateButton
+                  templateId={baseTemplate.id}
+                  templateName={baseTemplate.name}
+                />
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Usa el caso base del toolkit con datos pre-cargados: 6 pasos VSM,
-              6 riesgos, 4 problemas de desperdicio y 5 iniciativas.
-              Ideal para bootcamps y workshops.
-            </p>
-            <div className="mt-4">
-              <Link href="/dashboard/cases/template-base/context">
-                <Button>Usar caso base</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        <Card className="cursor-pointer transition-colors hover:bg-muted/50">
+        <Card className="transition-colors hover:bg-muted/50">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
@@ -62,9 +70,7 @@ export default function NewCasePage() {
               Agrega pasos, riesgos e iniciativas a tu ritmo.
             </p>
             <div className="mt-4">
-              <Link href="/dashboard/cases/new-blank/context">
-                <Button variant="outline">Crear en blanco</Button>
-              </Link>
+              <CreateBlankButton />
             </div>
           </CardContent>
         </Card>

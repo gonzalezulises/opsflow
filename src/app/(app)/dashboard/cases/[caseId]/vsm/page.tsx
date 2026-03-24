@@ -1,4 +1,5 @@
 import { VSMTable } from "@/features/vsm/components/vsm-table";
+import { getProcessSteps } from "@/server/actions/vsm";
 
 export default async function VSMPage({
   params,
@@ -6,6 +7,8 @@ export default async function VSMPage({
   params: Promise<{ caseId: string }>;
 }) {
   const { caseId } = await params;
+  const result = await getProcessSteps(caseId);
+  const steps = result.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -16,7 +19,7 @@ export default async function VSMPage({
           eficiencia de flujo
         </p>
       </div>
-      <VSMTable caseId={caseId} />
+      <VSMTable caseId={caseId} initialSteps={steps} />
     </div>
   );
 }

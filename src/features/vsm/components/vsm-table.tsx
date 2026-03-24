@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useTransition } from "react";
 import {
   Table,
   TableBody,
@@ -17,6 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { calculateVSM, type ProcessStep } from "@/lib/calculations/vsm";
 import { VSMSummary } from "./vsm-summary";
+import { saveAllProcessSteps } from "@/server/actions/vsm";
+import { toast } from "sonner";
 
 interface StepRow {
   id: string;
@@ -30,81 +32,49 @@ interface StepRow {
   observations: string;
 }
 
-const INITIAL_STEPS: StepRow[] = [
-  {
-    id: crypto.randomUUID(),
-    name: "Recepcion del pedido",
-    department: "Ventas",
-    processTimeMinutes: 15,
-    waitTimeHours: 4,
-    reworkPercentage: 5,
-    system: "ERP",
-    addsValue: true,
-    observations: "",
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Verificacion crediticia",
-    department: "Finanzas",
-    processTimeMinutes: 20,
-    waitTimeHours: 24,
-    reworkPercentage: 11,
-    system: "ERP",
-    addsValue: false,
-    observations: "Hold financiero frecuente",
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Planificacion de produccion",
-    department: "Planificacion",
-    processTimeMinutes: 30,
-    waitTimeHours: 12,
-    reworkPercentage: 8,
-    system: "Excel",
-    addsValue: true,
-    observations: "",
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Picking y empaque",
-    department: "Almacen",
-    processTimeMinutes: 45,
-    waitTimeHours: 8,
-    reworkPercentage: 9,
-    system: "WMS",
-    addsValue: true,
-    observations: "Retrabajo por errores de picking",
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Control de calidad",
-    department: "Calidad",
-    processTimeMinutes: 20,
-    waitTimeHours: 6,
-    reworkPercentage: 4,
-    system: "Manual",
-    addsValue: false,
-    observations: "",
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "Despacho y transporte",
-    department: "Logistica",
-    processTimeMinutes: 25,
-    waitTimeHours: 12,
-    reworkPercentage: 3,
-    system: "TMS",
-    addsValue: true,
-    observations: "",
-  },
-];
+interface DBProcessStep {
+  id: string;
+  caseId: string;
+  orderIndex: number;
+  stepName: string;
+  department: string | null;
+  processTimeMinutes: string | null;
+  waitTimeHours: string | null;
+  reworkPercentage: string | null;
+  systemUsed: string | null;
+  wip: number | null;
+  addsValue: boolean | null;
+  observations: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+function dbToRow(step: DBProcessStep): StepRow {
+  return {
+    id: step.id,
+    name: step.stepName,
+    department: step.department ?? "",
+    processTimeMinutes: Number(step.processTimeMinutes) || 0,
+    waitTimeHours: Number(step.waitTimeHours) || 0,
+    reworkPercentage: Number(step.reworkPercentage) || 0,
+    system: step.systemUsed ?? "",
+    addsValue: step.addsValue ?? false,
+    observations: step.observations ?? "",
+  };
+}
 
 interface VSMTableProps {
   caseId: string;
+  initialSteps: DBProcessStep[];
 }
 
-export function VSMTable({ caseId }: VSMTableProps) {
-  const [steps, setSteps] = useState<StepRow[]>(INITIAL_STEPS);
+export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
+  const [steps, setSteps] = useState<StepRow[]>(
+    initialSteps.length > 0 ? initialSteps.map(dbToRow) : [],
+  );
+  const [isPending, startTransition] = useTransition();
   const [mode, setMode] = useState<"lean_correct" | "compatibility">(
     "lean_correct"
   );
@@ -163,8 +133,28 @@ export function VSMTable({ caseId }: VSMTableProps) {
     [updateStep]
   );
 
-  // Suppress unused variable warning - caseId will be used for persistence
-  void caseId;
+  const handleSave = useCallback(() => {
+    startTransition(async () => {
+      const dbSteps = steps.map((s, index) => ({
+        caseId,
+        orderIndex: index,
+        stepName: s.name,
+        department: s.department,
+        processTimeMinutes: String(s.processTimeMinutes),
+        waitTimeHours: String(s.waitTimeHours),
+        reworkPercentage: String(s.reworkPercentage),
+        systemUsed: s.system,
+        addsValue: s.addsValue,
+        observations: s.observations,
+      }));
+      const result = await saveAllProcessSteps(caseId, dbSteps);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("VSM guardado");
+      }
+    });
+  }, [steps, caseId]);
 
   return (
     <div className="space-y-6">
@@ -350,7 +340,9 @@ export function VSMTable({ caseId }: VSMTableProps) {
             <Button variant="outline" size="sm" onClick={addStep}>
               Agregar paso
             </Button>
-            <Button size="sm">Guardar</Button>
+            <Button size="sm" onClick={handleSave} disabled={isPending}>
+              {isPending ? "Guardando..." : "Guardar"}
+            </Button>
           </div>
         </CardContent>
       </Card>

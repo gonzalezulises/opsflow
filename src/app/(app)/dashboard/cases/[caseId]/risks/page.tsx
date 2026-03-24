@@ -1,4 +1,5 @@
 import { RiskMatrix } from "@/features/risks/components/risk-matrix";
+import { getRiskItems } from "@/server/actions/risks";
 
 export default async function RisksPage({
   params,
@@ -6,6 +7,8 @@ export default async function RisksPage({
   params: Promise<{ caseId: string }>;
 }) {
   const { caseId } = await params;
+  const result = await getRiskItems(caseId);
+  const risks = result.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -15,7 +18,7 @@ export default async function RisksPage({
           Identifica y evalúa riesgos por paso del proceso, considerando el contexto operativo
         </p>
       </div>
-      <RiskMatrix caseId={caseId} />
+      <RiskMatrix caseId={caseId} initialRisks={risks} />
     </div>
   );
 }

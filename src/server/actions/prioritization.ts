@@ -198,6 +198,55 @@ export async function savePrioritizationWeights(
   }
 }
 
+export async function saveAllInitiatives(
+  caseId: string,
+  items: z.input<typeof initiativeSchema>[],
+) {
+  try {
+    const weights = await getWeightsForCase(caseId);
+
+    const result = await db.transaction(async (tx) => {
+      await tx.delete(initiatives).where(eq(initiatives.caseId, caseId));
+
+      if (items.length === 0) return [];
+
+      const validatedItems = items.map((item) => {
+        const parsed = initiativeSchema.safeParse({ ...item, caseId });
+        if (!parsed.success) throw new Error(parsed.error.issues[0].message);
+
+        const { id, caseId: _caseId, name, description, ...scores } = parsed.data;
+        const { totalScore, classification } = calculatePrioritizationScore(scores, weights);
+
+        return {
+          caseId,
+          name,
+          description,
+          impactLeadTime: String(scores.impactLeadTime),
+          impactEconomic: String(scores.impactEconomic),
+          impactResilience: String(scores.impactResilience),
+          feasibility30d: String(scores.feasibility30d),
+          effort: String(scores.effort),
+          externalDependency: String(scores.externalDependency),
+          totalScore: String(totalScore),
+          classification,
+        };
+      });
+
+      const rows = await tx
+        .insert(initiatives)
+        .values(validatedItems)
+        .returning();
+
+      return rows;
+    });
+
+    revalidatePath(`/cases/${caseId}`);
+    return { data: result };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 export async function recalculateAllScores(caseId: string) {
   try {
     const weights = await getWeightsForCase(caseId);

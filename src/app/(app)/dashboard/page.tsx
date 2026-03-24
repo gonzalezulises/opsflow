@@ -2,8 +2,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus, FileText, Users, BarChart3 } from "lucide-react";
+import { getCases, getTemplates } from "@/server/actions/cases";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const [casesResult, templatesResult] = await Promise.all([
+    getCases(),
+    getTemplates(),
+  ]);
+
+  const casesList = casesResult.data ?? [];
+  const templatesList = templatesResult.data ?? [];
+
+  const activeCases = casesList.filter((c) => c.status === "in_progress").length;
+  const completedCases = casesList.filter((c) => c.status === "completed").length;
+  const totalCases = casesList.length;
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -28,18 +41,18 @@ export default function DashboardPage() {
             <FileText className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{activeCases}</div>
             <p className="text-xs text-muted-foreground">En progreso</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Equipos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total casos</CardTitle>
             <Users className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">Participantes</p>
+            <div className="text-2xl font-bold">{totalCases}</div>
+            <p className="text-xs text-muted-foreground">Creados</p>
           </CardContent>
         </Card>
         <Card>
@@ -48,7 +61,7 @@ export default function DashboardPage() {
             <BarChart3 className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{completedCases}</div>
             <p className="text-xs text-muted-foreground">Casos finalizados</p>
           </CardContent>
         </Card>
@@ -58,8 +71,8 @@ export default function DashboardPage() {
             <FileText className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1</div>
-            <p className="text-xs text-muted-foreground">Caso base disponible</p>
+            <div className="text-2xl font-bold">{templatesList.length}</div>
+            <p className="text-xs text-muted-foreground">Disponibles</p>
           </CardContent>
         </Card>
       </div>
@@ -73,14 +86,16 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Link href="/dashboard/cases/new?template=base" className="block">
-              <div className="rounded-lg border p-4 transition-colors hover:bg-muted/50">
-                <h4 className="font-medium">Alimentos Santa Emilia, C.A.</h4>
-                <p className="text-sm text-muted-foreground">
-                  Caso base del toolkit — Sector alimentos, proceso pedido a despacho
-                </p>
-              </div>
-            </Link>
+            {templatesList.map((t) => (
+              <Link key={t.id} href={`/dashboard/cases/new?template=${t.id}`} className="block">
+                <div className="rounded-lg border p-4 transition-colors hover:bg-muted/50">
+                  <h4 className="font-medium">{t.companyName ?? t.name}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {t.sector ? `Sector ${t.sector.toLowerCase()}` : "Plantilla"} — {t.processFocus ?? "Proceso general"}
+                  </p>
+                </div>
+              </Link>
+            ))}
             <Link href="/dashboard/cases/new" className="block">
               <div className="rounded-lg border border-dashed p-4 transition-colors hover:bg-muted/50">
                 <h4 className="font-medium">Caso en blanco</h4>

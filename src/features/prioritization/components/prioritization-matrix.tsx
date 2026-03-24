@@ -16,11 +16,12 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 import {
   calculatePrioritizationScore,
-  getClassificationColor,
   DEFAULT_WEIGHTS,
   type InitiativeScores,
   type PrioritizationWeights,
 } from "@/lib/calculations/prioritization";
+import { saveAllInitiatives } from "@/server/actions/prioritization";
+import { toast } from "sonner";
 
 interface InitiativeRow extends InitiativeScores {
   id: string;
@@ -28,22 +29,60 @@ interface InitiativeRow extends InitiativeScores {
   description: string;
 }
 
-const INITIAL_INITIATIVES: InitiativeRow[] = [
-  { id: "1", name: "Checklist obligatorio de pedido", description: "", impactLeadTime: 4, impactEconomic: 4, impactResilience: 3, feasibility30d: 5, effort: 2, externalDependency: 1 },
-  { id: "2", name: "Ventana diaria de liberación financiera", description: "", impactLeadTime: 3, impactEconomic: 3, impactResilience: 3, feasibility30d: 4, effort: 2, externalDependency: 2 },
-  { id: "3", name: "Semáforo de materiales críticos", description: "", impactLeadTime: 3, impactEconomic: 4, impactResilience: 5, feasibility30d: 3, effort: 3, externalDependency: 3 },
-  { id: "4", name: "Congelar cambios de prioridad después del corte", description: "", impactLeadTime: 4, impactEconomic: 3, impactResilience: 4, feasibility30d: 4, effort: 2, externalDependency: 1 },
-  { id: "5", name: "Back-up del supervisor de picking", description: "", impactLeadTime: 2, impactEconomic: 2, impactResilience: 5, feasibility30d: 4, effort: 3, externalDependency: 1 },
-];
+interface InitiativeFromDB {
+  id: string;
+  caseId: string;
+  name: string;
+  description: string | null;
+  impactLeadTime: string | null;
+  impactEconomic: string | null;
+  impactResilience: string | null;
+  feasibility30d: string | null;
+  effort: string | null;
+  externalDependency: string | null;
+  totalScore: string | null;
+  classification: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+function dbToRow(item: InitiativeFromDB): InitiativeRow {
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description ?? "",
+    impactLeadTime: Number(item.impactLeadTime ?? 3),
+    impactEconomic: Number(item.impactEconomic ?? 3),
+    impactResilience: Number(item.impactResilience ?? 3),
+    feasibility30d: Number(item.feasibility30d ?? 3),
+    effort: Number(item.effort ?? 3),
+    externalDependency: Number(item.externalDependency ?? 3),
+  };
+}
 
 function classificationBadge(classification: string) {
   const variant = classification === "Atacar ya" ? "default" as const : classification === "Diseñar" ? "secondary" as const : "outline" as const;
   return <Badge variant={variant}>{classification}</Badge>;
 }
 
-export function PrioritizationMatrix({ caseId }: { caseId: string }) {
-  const [initiatives, setInitiatives] = useState<InitiativeRow[]>(INITIAL_INITIATIVES);
-  const [weights] = useState<PrioritizationWeights>(DEFAULT_WEIGHTS);
+interface PrioritizationMatrixProps {
+  caseId: string;
+  initialInitiatives: InitiativeFromDB[];
+  initialWeights?: PrioritizationWeights;
+}
+
+export function PrioritizationMatrix({
+  caseId,
+  initialInitiatives,
+  initialWeights,
+}: PrioritizationMatrixProps) {
+  const [initiatives, setInitiatives] = useState<InitiativeRow[]>(
+    initialInitiatives.map(dbToRow),
+  );
+  const [weights] = useState<PrioritizationWeights>(initialWeights ?? DEFAULT_WEIGHTS);
+  const [saving, setSaving] = useState(false);
 
   function updateInitiative(id: string, field: keyof InitiativeRow, value: string | number) {
     setInitiatives((prev) =>
@@ -70,6 +109,30 @@ export function PrioritizationMatrix({ caseId }: { caseId: string }) {
 
   function removeInitiative(id: string) {
     setInitiatives((prev) => prev.filter((i) => i.id !== id));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const payload = initiatives.map((i) => ({
+      caseId,
+      name: i.name,
+      description: i.description,
+      impactLeadTime: i.impactLeadTime,
+      impactEconomic: i.impactEconomic,
+      impactResilience: i.impactResilience,
+      feasibility30d: i.feasibility30d,
+      effort: i.effort,
+      externalDependency: i.externalDependency,
+    }));
+
+    const result = await saveAllInitiatives(caseId, payload);
+    setSaving(false);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Priorización guardada");
+    }
   }
 
   const scored = initiatives
@@ -169,7 +232,9 @@ export function PrioritizationMatrix({ caseId }: { caseId: string }) {
           <Plus className="mr-2 size-4" />
           Agregar iniciativa
         </Button>
-        <Button>Guardar priorización</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando..." : "Guardar priorización"}
+        </Button>
       </div>
     </div>
   );

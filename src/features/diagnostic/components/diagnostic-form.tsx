@@ -1,115 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { DiagnosticSummary } from "./diagnostic-summary";
+import { saveBulkDiagnosticResponses } from "@/server/actions/diagnostic";
+
+interface DbQuestion {
+  id: string;
+  caseId: string;
+  orderIndex: number;
+  category: string | null;
+  questionText: string;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+interface DbResponse {
+  id: string;
+  caseId: string;
+  questionId: string;
+  score: number;
+  comment: string | null;
+  respondedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
 
 interface DiagnosticFormProps {
   caseId: string;
+  questions: DbQuestion[];
+  initialResponses: DbResponse[];
 }
-
-type Category =
-  | "Planificación"
-  | "Ejecución"
-  | "Control"
-  | "Mejora"
-  | "Contexto";
-
-interface DiagnosticQuestion {
-  id: number;
-  category: Category;
-  text: string;
-}
-
-const QUESTIONS: DiagnosticQuestion[] = [
-  {
-    id: 1,
-    category: "Planificación",
-    text: "¿Existe un plan de producción/operaciones documentado y actualizado?",
-  },
-  {
-    id: 2,
-    category: "Planificación",
-    text: "¿Se utilizan datos históricos para la planificación de demanda?",
-  },
-  {
-    id: 3,
-    category: "Planificación",
-    text: "¿Los objetivos operativos están alineados con la estrategia del negocio?",
-  },
-  {
-    id: 4,
-    category: "Ejecución",
-    text: "¿Los procesos clave están estandarizados y documentados?",
-  },
-  {
-    id: 5,
-    category: "Ejecución",
-    text: "¿El personal conoce y sigue los procedimientos operativos?",
-  },
-  {
-    id: 6,
-    category: "Ejecución",
-    text: "¿Se cuenta con recursos adecuados para cumplir los compromisos de entrega?",
-  },
-  {
-    id: 7,
-    category: "Control",
-    text: "¿Existen indicadores de desempeño (KPIs) definidos y medidos regularmente?",
-  },
-  {
-    id: 8,
-    category: "Control",
-    text: "¿Se realizan auditorías o revisiones periódicas del proceso?",
-  },
-  {
-    id: 9,
-    category: "Control",
-    text: "¿Hay mecanismos de alerta temprana ante desviaciones?",
-  },
-  {
-    id: 10,
-    category: "Mejora",
-    text: "¿Se implementan acciones correctivas de forma sistemática?",
-  },
-  {
-    id: 11,
-    category: "Mejora",
-    text: "¿Existe un proceso formal de mejora continua (Kaizen, PDCA, etc.)?",
-  },
-  {
-    id: 12,
-    category: "Mejora",
-    text: "¿Se registran y analizan las lecciones aprendidas?",
-  },
-  {
-    id: 13,
-    category: "Contexto",
-    text: "¿La cultura organizacional apoya la gestión por procesos?",
-  },
-  {
-    id: 14,
-    category: "Contexto",
-    text: "¿Se cuenta con herramientas tecnológicas adecuadas para la operación?",
-  },
-  {
-    id: 15,
-    category: "Contexto",
-    text: "¿Existe colaboración efectiva entre áreas funcionales?",
-  },
-];
-
-const CATEGORIES: Category[] = [
-  "Planificación",
-  "Ejecución",
-  "Control",
-  "Mejora",
-  "Contexto",
-];
 
 const SCALE_LABELS: Record<number, string> = {
   1: "Muy bajo",
@@ -119,26 +50,65 @@ const SCALE_LABELS: Record<number, string> = {
   5: "Muy alto",
 };
 
-export function DiagnosticForm({ caseId }: DiagnosticFormProps) {
-  const [scores, setScores] = useState<Record<number, number>>({});
-  const [comments, setComments] = useState<Record<number, string>>({});
+export function DiagnosticForm({
+  caseId,
+  questions,
+  initialResponses,
+}: DiagnosticFormProps) {
+  const [isPending, startTransition] = useTransition();
 
-  const handleScoreChange = (questionId: number, value: string) => {
+  const initialScores: Record<string, number> = {};
+  const initialComments: Record<string, string> = {};
+  for (const r of initialResponses) {
+    initialScores[r.questionId] = r.score;
+    if (r.comment) initialComments[r.questionId] = r.comment;
+  }
+
+  const [scores, setScores] = useState<Record<string, number>>(initialScores);
+  const [comments, setComments] = useState<Record<string, string>>(initialComments);
+
+  const handleScoreChange = (questionId: string, value: string) => {
     setScores((prev) => ({ ...prev, [questionId]: Number(value) }));
   };
 
-  const handleCommentChange = (questionId: number, value: string) => {
+  const handleCommentChange = (questionId: string, value: string) => {
     setComments((prev) => ({ ...prev, [questionId]: value }));
   };
 
-  const allScores = QUESTIONS.map((q) => scores[q.id] ?? 0);
+  const handleSave = () => {
+    const responses = questions
+      .filter((q) => scores[q.id] !== undefined)
+      .map((q) => ({
+        questionId: q.id,
+        score: scores[q.id],
+        comment: comments[q.id] || undefined,
+      }));
+
+    if (responses.length === 0) {
+      toast.error("Responde al menos una pregunta antes de guardar");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await saveBulkDiagnosticResponses({ caseId, responses });
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Diagnóstico guardado");
+      }
+    });
+  };
+
+  const categories = [...new Set(questions.map((q) => q.category ?? "General"))];
+
+  const allScores = questions.map((q) => scores[q.id] ?? 0);
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
-        {CATEGORIES.map((category) => {
-          const categoryQuestions = QUESTIONS.filter(
-            (q) => q.category === category
+        {categories.map((category) => {
+          const categoryQuestions = questions.filter(
+            (q) => (q.category ?? "General") === category
           );
 
           return (
@@ -150,7 +120,7 @@ export function DiagnosticForm({ caseId }: DiagnosticFormProps) {
                 {categoryQuestions.map((question) => (
                   <div key={question.id} className="space-y-3">
                     <Label className="text-sm font-normal leading-snug">
-                      {question.id}. {question.text}
+                      {question.orderIndex}. {question.questionText}
                     </Label>
 
                     <RadioGroup
@@ -194,7 +164,9 @@ export function DiagnosticForm({ caseId }: DiagnosticFormProps) {
         })}
 
         <div className="flex justify-end">
-          <Button>Guardar diagnóstico</Button>
+          <Button onClick={handleSave} disabled={isPending}>
+            {isPending ? "Guardando..." : "Guardar diagnóstico"}
+          </Button>
         </div>
       </div>
 

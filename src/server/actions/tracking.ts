@@ -76,6 +76,38 @@ export async function saveWeeklyMetric(
   }
 }
 
+export async function saveAllWeeklyMetrics(
+  caseId: string,
+  items: z.input<typeof weeklyMetricSchema>[],
+) {
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.delete(weeklyMetrics).where(eq(weeklyMetrics.caseId, caseId));
+
+      if (items.length === 0) return [];
+
+      const validatedItems = items.map((item) => {
+        const parsed = weeklyMetricSchema.safeParse({ ...item, caseId });
+        if (!parsed.success) throw new Error(parsed.error.issues[0].message);
+        const { id, ...values } = parsed.data;
+        return values;
+      });
+
+      const rows = await tx
+        .insert(weeklyMetrics)
+        .values(validatedItems)
+        .returning();
+
+      return rows;
+    });
+
+    revalidatePath(`/cases/${caseId}`);
+    return { data: result };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 export async function deleteWeeklyMetric(id: string) {
   try {
     const [row] = await db

@@ -6,6 +6,7 @@ import { eq, and, isNull, asc, desc, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   cases,
+  organizations,
   diagnosticQuestions,
   diagnosticResponses,
   processSteps,
@@ -16,6 +17,37 @@ import {
   weeklyMetrics,
   prioritizationWeights,
 } from "@/server/db/schema";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
+const DEFAULT_TEMPLATE_ID = "00000000-0000-0000-0000-000000000002";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function getOrCreateDefaultOrg(): Promise<string> {
+  const [existing] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(eq(organizations.id, DEFAULT_ORG_ID));
+
+  if (existing) return existing.id;
+
+  const [created] = await db
+    .insert(organizations)
+    .values({
+      id: DEFAULT_ORG_ID,
+      name: "OpsFlow Demo",
+      slug: "opsflow-demo",
+    })
+    .returning();
+
+  return created.id;
+}
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -47,14 +79,15 @@ const updateCaseSchema = z.object({
 // Queries
 // ---------------------------------------------------------------------------
 
-export async function getCases(organizationId: string) {
+export async function getCases() {
   try {
+    const orgId = await getOrCreateDefaultOrg();
     const rows = await db
       .select()
       .from(cases)
       .where(
         and(
-          eq(cases.organizationId, organizationId),
+          eq(cases.organizationId, orgId),
           eq(cases.isTemplate, false),
           isNull(cases.deletedAt),
         ),
@@ -136,14 +169,15 @@ export async function getCase(id: string) {
   }
 }
 
-export async function getTemplates(organizationId: string) {
+export async function getTemplates() {
   try {
+    const orgId = await getOrCreateDefaultOrg();
     const rows = await db
       .select()
       .from(cases)
       .where(
         and(
-          eq(cases.organizationId, organizationId),
+          eq(cases.organizationId, orgId),
           eq(cases.isTemplate, true),
           isNull(cases.deletedAt),
         ),
@@ -156,6 +190,10 @@ export async function getTemplates(organizationId: string) {
   }
 }
 
+export async function getDefaultTemplateId(): Promise<string> {
+  return DEFAULT_TEMPLATE_ID;
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -166,7 +204,27 @@ export async function createCase(data: z.input<typeof createCaseSchema>) {
 
   try {
     const [row] = await db.insert(cases).values(parsed.data).returning();
-    revalidatePath("/cases");
+    revalidatePath("/dashboard/cases");
+    return { data: row };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function createBlankCase(name: string) {
+  try {
+    const orgId = await getOrCreateDefaultOrg();
+    const [row] = await db
+      .insert(cases)
+      .values({
+        name,
+        organizationId: orgId,
+        isTemplate: false,
+        status: "draft",
+      })
+      .returning();
+
+    revalidatePath("/dashboard/cases");
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -176,9 +234,10 @@ export async function createCase(data: z.input<typeof createCaseSchema>) {
 export async function createCaseFromTemplate(
   templateId: string,
   name: string,
-  organizationId: string,
 ) {
   try {
+    const orgId = await getOrCreateDefaultOrg();
+
     const [template] = await db
       .select()
       .from(cases)
@@ -198,7 +257,7 @@ export async function createCaseFromTemplate(
         .insert(cases)
         .values({
           name,
-          organizationId,
+          organizationId: orgId,
           isTemplate: false,
           templateId,
           sector: template.sector,
@@ -231,7 +290,7 @@ export async function createCaseFromTemplate(
         );
       }
 
-      // 3. Copy process steps and build old→new ID map for risk items
+      // 3. Copy process steps and build old->new ID map for risk items
       const templateSteps = await tx
         .select()
         .from(processSteps)
@@ -312,7 +371,7 @@ export async function createCaseFromTemplate(
         );
       }
 
-      // 6. Copy initiatives and build old→new ID map for action items
+      // 6. Copy initiatives and build old->new ID map for action items
       const templateInitiatives = await tx
         .select()
         .from(initiatives)
@@ -392,7 +451,7 @@ export async function createCaseFromTemplate(
       return newCase;
     });
 
-    revalidatePath("/cases");
+    revalidatePath("/dashboard/cases");
     return { data: result };
   } catch (e) {
     return { error: (e as Error).message };
@@ -421,8 +480,8 @@ export async function updateCase(
 
     if (!row) return { error: "Caso no encontrado" };
 
-    revalidatePath("/cases");
-    revalidatePath(`/cases/${id}`);
+    revalidatePath("/dashboard/cases");
+    revalidatePath(`/dashboard/cases/${id}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -439,7 +498,7 @@ export async function deleteCase(id: string) {
 
     if (!row) return { error: "Caso no encontrado" };
 
-    revalidatePath("/cases");
+    revalidatePath("/dashboard/cases");
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
