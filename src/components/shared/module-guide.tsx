@@ -29,8 +29,8 @@ export interface ModuleGuideContent {
   };
 }
 
-export function ModuleGuide({ content }: { content: ModuleGuideContent }) {
-  const [open, setOpen] = useState(true);
+export function ModuleGuide({ content, defaultOpen = true }: { content: ModuleGuideContent; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
     <Card className="border-primary/20 bg-primary/[0.02]">

@@ -1,5 +1,5 @@
 import { DiagnosticForm } from "@/features/diagnostic/components/diagnostic-form";
-import { ModuleGuide } from "@/components/shared/module-guide";
+import { ModulePage } from "@/components/shared/module-page";
 import { MODULE_GUIDES } from "@/lib/constants/guides";
 import {
   getDiagnosticQuestions,
@@ -22,20 +22,12 @@ export default async function DiagnosticPage({
   const responses = responsesResult.data ?? [];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Diagnóstico de madurez</h2>
-        <p className="text-sm text-muted-foreground">
-          Evalúa el nivel de madurez operativa respondiendo 15 preguntas
-          agrupadas por categoría
-        </p>
-      </div>
-      <ModuleGuide content={MODULE_GUIDES.diagnostic} />
+    <ModulePage guide={MODULE_GUIDES.diagnostic}>
       <DiagnosticForm
         caseId={caseId}
         questions={questions}
         initialResponses={responses}
       />
-    </div>
+    </ModulePage>
   );
 }

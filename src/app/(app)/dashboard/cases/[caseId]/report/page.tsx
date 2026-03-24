@@ -1,5 +1,5 @@
 import { ExecutiveReport } from "@/features/reports/components/executive-report";
-import { ModuleGuide } from "@/components/shared/module-guide";
+import { ModulePage } from "@/components/shared/module-page";
 import { MODULE_GUIDES } from "@/lib/constants/guides";
 
 export default async function ReportPage({
@@ -10,15 +10,8 @@ export default async function ReportPage({
   const { caseId } = await params;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Reporte ejecutivo</h2>
-        <p className="text-sm text-muted-foreground">
-          Resumen consolidado del caso con todos los hallazgos y recomendaciones
-        </p>
-      </div>
-      <ModuleGuide content={MODULE_GUIDES.report} />
+    <ModulePage guide={MODULE_GUIDES.report}>
       <ExecutiveReport caseId={caseId} />
-    </div>
+    </ModulePage>
   );
 }
