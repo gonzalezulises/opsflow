@@ -25,14 +25,14 @@ export function ModulePage({ guide, children }: ModulePageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+      <div className="flex items-center gap-1 rounded-lg border bg-muted/60 p-1">
         <button
           onClick={() => setTab("guide")}
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+            "flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-colors",
             tab === "guide"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-white text-foreground shadow-sm border"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/50"
           )}
         >
           <BookOpen className="size-4" />
@@ -41,10 +41,10 @@ export function ModulePage({ guide, children }: ModulePageProps) {
         <button
           onClick={() => setTab("exercise")}
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+            "flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-colors",
             tab === "exercise"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-white text-foreground shadow-sm border"
+              : "text-muted-foreground hover:text-foreground hover:bg-white/50"
           )}
         >
           <Wrench className="size-4" />
