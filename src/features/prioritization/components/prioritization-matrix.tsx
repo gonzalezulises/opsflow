@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Sparkles, Loader2 } from "lucide-react";
 import {
   calculatePrioritizationScore,
   DEFAULT_WEIGHTS,
@@ -21,7 +21,10 @@ import {
   type PrioritizationWeights,
 } from "@/lib/calculations/prioritization";
 import { saveAllInitiatives } from "@/server/actions/prioritization";
+import { generateFromAI } from "@/server/actions/ai";
+import { AIPanel } from "@/components/shared/ai-panel";
 import { toast } from "sonner";
+import type { InitiativeGeneration } from "@/server/ai/schemas";
 
 interface InitiativeRow extends InitiativeScores {
   id: string;
@@ -83,6 +86,7 @@ export function PrioritizationMatrix({
   );
   const [weights] = useState<PrioritizationWeights>(initialWeights ?? DEFAULT_WEIGHTS);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   function updateInitiative(id: string, field: keyof InitiativeRow, value: string | number) {
     setInitiatives((prev) =>
@@ -133,6 +137,41 @@ export function PrioritizationMatrix({
     } else {
       toast.success("Priorización guardada");
     }
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    const result = await generateFromAI(caseId, "initiative_generation");
+    setGenerating(false);
+
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    const generated = result.data as InitiativeGeneration;
+    if (generated?.initiatives) {
+      const newInitiatives: InitiativeRow[] = generated.initiatives.map((init) => ({
+        id: crypto.randomUUID(),
+        name: init.name,
+        description: init.description,
+        impactLeadTime: init.impactLeadTime,
+        impactEconomic: init.impactEconomic,
+        impactResilience: init.impactResilience,
+        feasibility30d: init.feasibility30d,
+        effort: init.effort,
+        externalDependency: init.externalDependency,
+      }));
+      setInitiatives((prev) => [...prev, ...newInitiatives]);
+      toast.success(`${newInitiatives.length} iniciativas generadas — revisa y ajusta antes de guardar`);
+    }
+  }
+
+  function buildContext() {
+    return initiatives.map((i, idx) => {
+      const { totalScore, classification } = calculatePrioritizationScore(i, weights);
+      return `${idx + 1}. ${i.name} — LeadT: ${i.impactLeadTime}, Econ: ${i.impactEconomic}, Resil: ${i.impactResilience}, Fact: ${i.feasibility30d}, Esf: ${i.effort}, Dep: ${i.externalDependency} → Score: ${totalScore} (${classification})`;
+    }).join("\n");
   }
 
   const scored = initiatives
@@ -313,11 +352,20 @@ export function PrioritizationMatrix({
         </Table>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={addInitiative}>
           <Plus className="mr-2 size-4" />
           Agregar iniciativa
         </Button>
+        <Button variant="outline" onClick={handleGenerate} disabled={generating}>
+          {generating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+          {generating ? "Generando..." : "Generar iniciativas con IA"}
+        </Button>
+        <AIPanel
+          module="Priorización"
+          actions={[{ type: "prioritization_review", label: "Revisar priorización" }]}
+          contextBuilder={buildContext}
+        />
         <Button onClick={handleSave} disabled={saving}>
           {saving ? "Guardando..." : "Guardar priorización"}
         </Button>

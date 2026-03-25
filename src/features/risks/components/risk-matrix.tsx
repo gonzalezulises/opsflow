@@ -14,10 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { calculateExposure, getRiskLevel, getRiskLevelLabel } from "@/lib/calculations/risk";
 import { saveAllRiskItems } from "@/server/actions/risks";
+import { generateFromAI } from "@/server/actions/ai";
+import { AIPanel } from "@/components/shared/ai-panel";
 import { toast } from "sonner";
+import type { RiskGeneration } from "@/server/ai/schemas";
 
 interface RiskRow {
   id: string;
@@ -78,6 +81,7 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
     initialRisks.length > 0 ? initialRisks.map(dbToRow) : [],
   );
   const [isPending, startTransition] = useTransition();
+  const [generating, setGenerating] = useState(false);
 
   function updateRisk(id: string, field: keyof RiskRow, value: string | number) {
     setRisks((prev) =>
@@ -124,6 +128,39 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
         toast.success("Riesgos guardados");
       }
     });
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    const result = await generateFromAI(caseId, "risk_generation");
+    setGenerating(false);
+
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    const generated = result.data as RiskGeneration;
+    if (generated?.risks) {
+      const newRisks: RiskRow[] = generated.risks.map((r) => ({
+        id: crypto.randomUUID(),
+        riskDescription: r.riskDescription,
+        riskType: r.riskType,
+        probability: r.probability,
+        impact: r.impact,
+        earlySignals: r.earlySignals,
+        mitigations: r.mitigations,
+        additionalAction: "",
+      }));
+      setRisks((prev) => [...prev, ...newRisks]);
+      toast.success(`${newRisks.length} riesgos generados — revisa y ajusta antes de guardar`);
+    }
+  }
+
+  function buildContext() {
+    return risks.map((r, i) =>
+      `${i + 1}. [${r.riskType}] ${r.riskDescription} — Prob: ${r.probability}, Imp: ${r.impact}, Señales: ${r.earlySignals || "N/A"}, Mitigaciones: ${r.mitigations || "N/A"}`
+    ).join("\n");
   }
 
   const sorted = [...risks]
@@ -238,11 +275,20 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
         </Table>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={addRisk}>
           <Plus className="mr-2 size-4" />
           Agregar riesgo
         </Button>
+        <Button variant="outline" onClick={handleGenerate} disabled={generating}>
+          {generating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+          {generating ? "Generando..." : "Generar riesgos con IA"}
+        </Button>
+        <AIPanel
+          module="Riesgos"
+          actions={[{ type: "risk_recommendations", label: "Analizar riesgos" }]}
+          contextBuilder={buildContext}
+        />
         <Button onClick={handleSave} disabled={isPending}>
           {isPending ? "Guardando..." : "Guardar riesgos"}
         </Button>

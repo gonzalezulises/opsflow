@@ -14,9 +14,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { saveAllActionItems } from "@/server/actions/plan";
+import { generateFromAI } from "@/server/actions/ai";
+import { AIPanel } from "@/components/shared/ai-panel";
 import { toast } from "sonner";
+import type { ActionPlanGeneration } from "@/server/ai/schemas";
 
 type ActionStatus = "pending" | "in_progress" | "completed" | "blocked" | "cancelled";
 
@@ -105,6 +108,7 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
     initialActions.map(dbToRow),
   );
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   function updateAction(id: string, field: keyof ActionRow, value: string) {
     setActions((prev) =>
@@ -159,6 +163,42 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
     } else {
       toast.success("Plan guardado");
     }
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    const result = await generateFromAI(caseId, "action_plan_generation");
+    setGenerating(false);
+
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    const generated = result.data as ActionPlanGeneration;
+    if (generated?.actions) {
+      const newActions: ActionRow[] = generated.actions.map((a) => ({
+        id: crypto.randomUUID(),
+        action: a.actionDescription,
+        responsible: a.responsible,
+        startDate: "",
+        endDate: "",
+        leadMetric: a.leadMetric,
+        baselineValue: a.baselineValue,
+        targetValue: a.targetValue,
+        contingency: a.contingency,
+        status: "pending" as ActionStatus,
+        initiativeId: null,
+      }));
+      setActions((prev) => [...prev, ...newActions]);
+      toast.success(`${newActions.length} acciones generadas — revisa y ajusta antes de guardar`);
+    }
+  }
+
+  function buildContext() {
+    return actions.map((a, i) =>
+      `${i + 1}. ${a.action} — Responsable: ${a.responsible || "N/A"}, Métrica: ${a.leadMetric || "N/A"}, Base: ${a.baselineValue || "N/A"}, Meta: ${a.targetValue || "N/A"}, Estado: ${a.status}, Contingencia: ${a.contingency || "N/A"}`
+    ).join("\n");
   }
 
   const completedCount = actions.filter((a) => a.status === "completed").length;
@@ -260,11 +300,20 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
         </Table>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={addAction}>
           <Plus className="mr-2 size-4" />
           Agregar acción
         </Button>
+        <Button variant="outline" onClick={handleGenerate} disabled={generating}>
+          {generating ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+          {generating ? "Generando..." : "Generar plan con IA"}
+        </Button>
+        <AIPanel
+          module="Plan de acción"
+          actions={[{ type: "action_plan_suggestions", label: "Revisar plan" }]}
+          contextBuilder={buildContext}
+        />
         <Button onClick={handleSave} disabled={saving}>
           {saving ? "Guardando..." : "Guardar plan"}
         </Button>

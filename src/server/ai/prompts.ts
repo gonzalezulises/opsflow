@@ -85,3 +85,54 @@ ${context}
 
 Incluye: resumen ejecutivo, hallazgos clave por área, top recomendaciones con prioridad y timeline, y perspectiva a 30-60 días.`;
 }
+
+// ─── Generation prompts (cross-module) ───
+
+export function riskGenerationPrompt(context: string): string {
+  return `Genera riesgos contextuales para este caso basándote en los pasos del VSM y el contexto operativo.
+
+DATOS:
+${context}
+
+INSTRUCCIONES:
+- Genera entre 5 y 8 riesgos relevantes.
+- Basa los riesgos en las esperas largas, retrabajo alto, handoffs problemáticos y dependencias del VSM.
+- Incluye riesgos exógenos típicos del contexto Venezuela (energía, reposición, talento, proveedor).
+- Para cada riesgo asigna probabilidad e impacto (1-5) de forma realista.
+- Las señales tempranas deben ser observables SIN necesidad de sistemas sofisticados.
+- Las mitigaciones deben ser ejecutables con recursos limitados.
+- El riskType DEBE ser exactamente uno de: "Disciplina comercial", "Gobierno", "Reposición", "Energía", "Talento", "Proveedor externo", "Tecnología", "Regulatorio", "Otro".`;
+}
+
+export function initiativeGenerationPrompt(context: string): string {
+  return `Genera iniciativas de mejora basándote en los riesgos, desperdicios y diagnóstico del caso.
+
+DATOS:
+${context}
+
+INSTRUCCIONES:
+- Genera entre 5 y 8 iniciativas concretas.
+- Cada iniciativa debe atacar al menos un riesgo crítico, una fuga de desperdicio, o un gap del diagnóstico.
+- Prioriza quick wins: alto impacto, bajo esfuerzo, ejecutables en 30 días.
+- Los scores (1-5) deben ser consistentes: si una iniciativa es fácil, effort debe ser bajo (1-2).
+- impactLeadTime y impactEconomic son los más importantes.
+- Nombres cortos y accionables (ej: "Buffer de inventario para picking", no "Mejora general del proceso").
+- Incluye al menos 2 iniciativas de bajo esfuerzo (effort ≤ 2) que se puedan ejecutar esta semana.`;
+}
+
+export function actionPlanGenerationPrompt(context: string): string {
+  return `Genera un plan de acciones de 30 días basado en las iniciativas priorizadas.
+
+DATOS:
+${context}
+
+INSTRUCCIONES:
+- Genera entre 5 y 10 acciones concretas, priorizando las iniciativas clasificadas como "Atacar ya".
+- Cada acción debe ser SMART: específica, medible, alcanzable, relevante y con tiempo definido.
+- El responsable debe ser un ROL (ej: "Jefe de almacén"), no un nombre.
+- La métrica líder debe ser cuantificable (ej: "Lead time en horas", no "mejorar el proceso").
+- El baseline y target deben ser numéricos cuando sea posible.
+- Las contingencias deben ser acciones concretas, no genéricas.
+- Distribuye las acciones a lo largo de las 4 semanas del plan.
+- NO uses markdown ni bullet points en los campos — solo texto plano.`;
+}

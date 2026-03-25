@@ -104,6 +104,46 @@ export const executiveReportSchema = z.object({
   outlook: z.string().describe("Perspectiva a 30-60 días"),
 });
 
+// ─── Generation schemas (produce items for direct table population) ───
+
+export const riskGenerationSchema = z.object({
+  risks: z.array(z.object({
+    riskDescription: z.string().describe("Descripción clara del riesgo"),
+    riskType: z.enum([
+      "Disciplina comercial", "Gobierno", "Reposición", "Energía",
+      "Talento", "Proveedor externo", "Tecnología", "Regulatorio", "Otro",
+    ]).describe("Categoría del riesgo"),
+    probability: z.number().min(1).max(5).describe("Probabilidad 1-5"),
+    impact: z.number().min(1).max(5).describe("Impacto 1-5"),
+    earlySignals: z.string().describe("Señales tempranas observables"),
+    mitigations: z.string().describe("Acciones de mitigación concretas"),
+  })).describe("Riesgos generados basados en el VSM y contexto"),
+});
+
+export const initiativeGenerationSchema = z.object({
+  initiatives: z.array(z.object({
+    name: z.string().describe("Nombre corto y accionable de la iniciativa"),
+    description: z.string().describe("Descripción de qué implica la iniciativa"),
+    impactLeadTime: z.number().min(1).max(5).describe("Impacto en lead time 1-5"),
+    impactEconomic: z.number().min(1).max(5).describe("Impacto económico 1-5"),
+    impactResilience: z.number().min(1).max(5).describe("Impacto en resiliencia 1-5"),
+    feasibility30d: z.number().min(1).max(5).describe("Factibilidad en 30 días 1-5"),
+    effort: z.number().min(1).max(5).describe("Esfuerzo requerido 1-5 (mayor=más difícil)"),
+    externalDependency: z.number().min(1).max(5).describe("Dependencia externa 1-5 (mayor=más dependiente)"),
+  })).describe("Iniciativas generadas basadas en riesgos, desperdicios y diagnóstico"),
+});
+
+export const actionPlanGenerationSchema = z.object({
+  actions: z.array(z.object({
+    actionDescription: z.string().describe("Acción específica y medible"),
+    responsible: z.string().describe("Rol o persona responsable sugerida"),
+    leadMetric: z.string().describe("Métrica líder de seguimiento"),
+    baselineValue: z.string().describe("Valor base actual estimado"),
+    targetValue: z.string().describe("Valor meta a 30 días"),
+    contingency: z.string().describe("Plan B si la acción se bloquea"),
+  })).describe("Acciones generadas para el plan de 30 días"),
+});
+
 export type DiagnosticSummary = z.infer<typeof diagnosticSummarySchema>;
 export type VSMAnalysis = z.infer<typeof vsmAnalysisSchema>;
 export type RiskRecommendations = z.infer<typeof riskRecommendationsSchema>;
@@ -112,3 +152,6 @@ export type PrioritizationReview = z.infer<typeof prioritizationReviewSchema>;
 export type ActionPlanSuggestions = z.infer<typeof actionPlanSuggestionsSchema>;
 export type WeeklyReview = z.infer<typeof weeklyReviewSchema>;
 export type ExecutiveReport = z.infer<typeof executiveReportSchema>;
+export type RiskGeneration = z.infer<typeof riskGenerationSchema>;
+export type InitiativeGeneration = z.infer<typeof initiativeGenerationSchema>;
+export type ActionPlanGeneration = z.infer<typeof actionPlanGenerationSchema>;
