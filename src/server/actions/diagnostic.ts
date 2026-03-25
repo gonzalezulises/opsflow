@@ -10,6 +10,28 @@ import {
 } from "@/server/db/schema";
 
 // ---------------------------------------------------------------------------
+// Default diagnostic questions (auto-created if case has none)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_QUESTIONS: { category: string; questionText: string }[] = [
+  { category: "Planificación", questionText: "¿Existe un flujo documentado y actualizado del proceso foco?" },
+  { category: "Planificación", questionText: "¿Los roles y responsabilidades de cada etapa están claramente definidos?" },
+  { category: "Planificación", questionText: "¿Se han establecido métricas de desempeño para el proceso?" },
+  { category: "Ejecución", questionText: "¿Se cumplen los estándares operativos definidos para cada etapa?" },
+  { category: "Ejecución", questionText: "¿Existe un mecanismo formal para gestionar incidencias en tiempo real?" },
+  { category: "Ejecución", questionText: "¿La coordinación entre áreas es fluida y oportuna?" },
+  { category: "Control", questionText: "¿Se utilizan indicadores de seguimiento para monitorear el proceso semanalmente?" },
+  { category: "Control", questionText: "¿Se realizan auditorías internas periódicas sobre el proceso?" },
+  { category: "Control", questionText: "¿Existe un mecanismo de retroalimentación del cliente interno y externo?" },
+  { category: "Mejora", questionText: "¿Hay proyectos de mejora activos relacionados con este proceso?" },
+  { category: "Mejora", questionText: "¿Existe una cultura organizacional que promueva la mejora continua?" },
+  { category: "Mejora", questionText: "¿Se utilizan datos y análisis para la toma de decisiones operativas?" },
+  { category: "Contexto", questionText: "¿Existe un plan de contingencia ante interrupciones externas (energía, suministros, transporte)?" },
+  { category: "Contexto", questionText: "¿Se gestiona activamente la reposición de materiales o insumos críticos?" },
+  { category: "Contexto", questionText: "¿Hay planes alternativos ante fallas de proveedores clave?" },
+];
+
+// ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
 
@@ -37,11 +59,26 @@ const bulkResponseSchema = z.object({
 
 export async function getDiagnosticQuestions(caseId: string) {
   try {
-    const rows = await db
+    let rows = await db
       .select()
       .from(diagnosticQuestions)
       .where(eq(diagnosticQuestions.caseId, caseId))
       .orderBy(asc(diagnosticQuestions.orderIndex));
+
+    // Auto-create default questions if the case has none
+    if (rows.length === 0) {
+      rows = await db
+        .insert(diagnosticQuestions)
+        .values(
+          DEFAULT_QUESTIONS.map((q, i) => ({
+            caseId,
+            orderIndex: i + 1,
+            category: q.category,
+            questionText: q.questionText,
+          })),
+        )
+        .returning();
+    }
 
     return { data: rows };
   } catch (e) {
