@@ -16,6 +16,8 @@ import {
 import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { calculateWasteCost, type WasteInput } from "@/lib/calculations/waste";
 import { saveAllWasteItems } from "@/server/actions/waste";
+import { SaveBar } from "@/components/shared/save-bar";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { toast } from "sonner";
 
 interface WasteRow extends WasteInput {
@@ -72,11 +74,15 @@ export function WasteTable({ caseId, initialItems }: WasteTableProps) {
     initialItems.map(dbToRow),
   );
   const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { dirty, markDirty, markClean } = useUnsavedChanges();
 
   function updateItem(id: string, field: keyof WasteRow, value: string | number) {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
+    markDirty();
   }
 
   function addItem() {
@@ -92,14 +98,17 @@ export function WasteTable({ caseId, initialItems }: WasteTableProps) {
         unitMargin: 0,
       },
     ]);
+    markDirty();
   }
 
   function removeItem(id: string) {
     setItems((prev) => prev.filter((item) => item.id !== id));
+    markDirty();
   }
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
     const payload = items.map((item) => ({
       caseId,
       problemDescription: item.problemDescription,
@@ -114,8 +123,11 @@ export function WasteTable({ caseId, initialItems }: WasteTableProps) {
     setSaving(false);
 
     if (result.error) {
+      setSaveError(result.error);
       toast.error(result.error);
     } else {
+      markClean();
+      setLastSaved(new Date());
       toast.success("Costos guardados");
     }
   }
@@ -331,15 +343,12 @@ export function WasteTable({ caseId, initialItems }: WasteTableProps) {
         </Table>
       </div>
 
-      <div className="flex gap-2">
+      <SaveBar dirty={dirty} saving={saving} lastSaved={lastSaved} error={saveError} onSave={handleSave} label="Guardar costos">
         <Button variant="outline" onClick={addItem}>
           <Plus className="mr-2 size-4" />
           Agregar problema
         </Button>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar costos"}
-        </Button>
-      </div>
+      </SaveBar>
     </div>
   );
 }

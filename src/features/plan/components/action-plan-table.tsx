@@ -18,6 +18,8 @@ import { Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { saveAllActionItems } from "@/server/actions/plan";
 import { generateFromAI } from "@/server/actions/ai";
 import { AIPanel } from "@/components/shared/ai-panel";
+import { SaveBar } from "@/components/shared/save-bar";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { toast } from "sonner";
 import type { ActionPlanGeneration } from "@/server/ai/schemas";
 
@@ -109,11 +111,15 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
   );
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { dirty, markDirty, markClean } = useUnsavedChanges();
 
   function updateAction(id: string, field: keyof ActionRow, value: string) {
     setActions((prev) =>
       prev.map((a) => (a.id === id ? { ...a, [field]: value } : a))
     );
+    markDirty();
   }
 
   function addAction() {
@@ -133,14 +139,17 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
         initiativeId: null,
       },
     ]);
+    markDirty();
   }
 
   function removeAction(id: string) {
     setActions((prev) => prev.filter((a) => a.id !== id));
+    markDirty();
   }
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
     const payload = actions.map((a) => ({
       caseId,
       initiativeId: a.initiativeId,
@@ -159,8 +168,11 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
     setSaving(false);
 
     if (result.error) {
+      setSaveError(result.error);
       toast.error(result.error);
     } else {
+      markClean();
+      setLastSaved(new Date());
       toast.success("Plan guardado");
     }
   }
@@ -191,6 +203,7 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
         initiativeId: null,
       }));
       setActions((prev) => [...prev, ...newActions]);
+      markDirty();
       toast.success(`${newActions.length} acciones generadas — revisa y ajusta antes de guardar`);
     }
   }
@@ -300,7 +313,7 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
         </Table>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <SaveBar dirty={dirty} saving={saving} lastSaved={lastSaved} error={saveError} onSave={handleSave} label="Guardar plan">
         <Button variant="outline" onClick={addAction}>
           <Plus className="mr-2 size-4" />
           Agregar acción
@@ -314,10 +327,7 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
           actions={[{ type: "action_plan_suggestions", label: "Revisar plan" }]}
           contextBuilder={buildContext}
         />
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar plan"}
-        </Button>
-      </div>
+      </SaveBar>
     </div>
   );
 }

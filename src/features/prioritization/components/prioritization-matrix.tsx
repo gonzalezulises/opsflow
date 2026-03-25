@@ -23,6 +23,8 @@ import {
 import { saveAllInitiatives } from "@/server/actions/prioritization";
 import { generateFromAI } from "@/server/actions/ai";
 import { AIPanel } from "@/components/shared/ai-panel";
+import { SaveBar } from "@/components/shared/save-bar";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { toast } from "sonner";
 import type { InitiativeGeneration } from "@/server/ai/schemas";
 
@@ -87,11 +89,15 @@ export function PrioritizationMatrix({
   const [weights] = useState<PrioritizationWeights>(initialWeights ?? DEFAULT_WEIGHTS);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { dirty, markDirty, markClean } = useUnsavedChanges();
 
   function updateInitiative(id: string, field: keyof InitiativeRow, value: string | number) {
     setInitiatives((prev) =>
       prev.map((i) => (i.id === id ? { ...i, [field]: value } : i))
     );
+    markDirty();
   }
 
   function addInitiative() {
@@ -109,14 +115,17 @@ export function PrioritizationMatrix({
         externalDependency: 3,
       },
     ]);
+    markDirty();
   }
 
   function removeInitiative(id: string) {
     setInitiatives((prev) => prev.filter((i) => i.id !== id));
+    markDirty();
   }
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(null);
     const payload = initiatives.map((i) => ({
       caseId,
       name: i.name,
@@ -133,8 +142,11 @@ export function PrioritizationMatrix({
     setSaving(false);
 
     if (result.error) {
+      setSaveError(result.error);
       toast.error(result.error);
     } else {
+      markClean();
+      setLastSaved(new Date());
       toast.success("Priorización guardada");
     }
   }
@@ -163,6 +175,7 @@ export function PrioritizationMatrix({
         externalDependency: init.externalDependency,
       }));
       setInitiatives((prev) => [...prev, ...newInitiatives]);
+      markDirty();
       toast.success(`${newInitiatives.length} iniciativas generadas — revisa y ajusta antes de guardar`);
     }
   }
@@ -352,7 +365,7 @@ export function PrioritizationMatrix({
         </Table>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <SaveBar dirty={dirty} saving={saving} lastSaved={lastSaved} error={saveError} onSave={handleSave} label="Guardar priorización">
         <Button variant="outline" onClick={addInitiative}>
           <Plus className="mr-2 size-4" />
           Agregar iniciativa
@@ -366,10 +379,7 @@ export function PrioritizationMatrix({
           actions={[{ type: "prioritization_review", label: "Revisar priorización" }]}
           contextBuilder={buildContext}
         />
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar priorización"}
-        </Button>
-      </div>
+      </SaveBar>
     </div>
   );
 }

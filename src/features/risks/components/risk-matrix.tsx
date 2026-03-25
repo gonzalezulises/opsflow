@@ -19,6 +19,8 @@ import { calculateExposure, getRiskLevel, getRiskLevelLabel } from "@/lib/calcul
 import { saveAllRiskItems } from "@/server/actions/risks";
 import { generateFromAI } from "@/server/actions/ai";
 import { AIPanel } from "@/components/shared/ai-panel";
+import { SaveBar } from "@/components/shared/save-bar";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { toast } from "sonner";
 import type { RiskGeneration } from "@/server/ai/schemas";
 
@@ -82,11 +84,15 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
   );
   const [isPending, startTransition] = useTransition();
   const [generating, setGenerating] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { dirty, markDirty, markClean } = useUnsavedChanges();
 
   function updateRisk(id: string, field: keyof RiskRow, value: string | number) {
     setRisks((prev) =>
       prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
     );
+    markDirty();
   }
 
   function addRisk() {
@@ -103,13 +109,16 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
         additionalAction: "",
       },
     ]);
+    markDirty();
   }
 
   function removeRisk(id: string) {
     setRisks((prev) => prev.filter((r) => r.id !== id));
+    markDirty();
   }
 
   function handleSave() {
+    setSaveError(null);
     startTransition(async () => {
       const dbItems = risks.map((r) => ({
         caseId,
@@ -123,8 +132,11 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
       }));
       const result = await saveAllRiskItems(caseId, dbItems);
       if (result.error) {
+        setSaveError(result.error);
         toast.error(result.error);
       } else {
+        markClean();
+        setLastSaved(new Date());
         toast.success("Riesgos guardados");
       }
     });
@@ -153,6 +165,7 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
         additionalAction: "",
       }));
       setRisks((prev) => [...prev, ...newRisks]);
+      markDirty();
       toast.success(`${newRisks.length} riesgos generados — revisa y ajusta antes de guardar`);
     }
   }
@@ -275,7 +288,7 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
         </Table>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <SaveBar dirty={dirty} saving={isPending} lastSaved={lastSaved} error={saveError} onSave={handleSave} label="Guardar riesgos">
         <Button variant="outline" onClick={addRisk}>
           <Plus className="mr-2 size-4" />
           Agregar riesgo
@@ -289,10 +302,7 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
           actions={[{ type: "risk_recommendations", label: "Analizar riesgos" }]}
           contextBuilder={buildContext}
         />
-        <Button onClick={handleSave} disabled={isPending}>
-          {isPending ? "Guardando..." : "Guardar riesgos"}
-        </Button>
-      </div>
+      </SaveBar>
     </div>
   );
 }

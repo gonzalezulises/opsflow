@@ -13,6 +13,8 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { DiagnosticSummary } from "./diagnostic-summary";
 import { saveBulkDiagnosticResponses } from "@/server/actions/diagnostic";
 import { getAIInsight } from "@/server/actions/ai";
+import { SaveBar } from "@/components/shared/save-bar";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import type { DiagnosticSummary as DiagnosticSummaryType } from "@/server/ai/schemas";
 
 interface DbQuestion {
@@ -61,6 +63,9 @@ export function DiagnosticForm({
   initialResponses,
 }: DiagnosticFormProps) {
   const [isPending, startTransition] = useTransition();
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { dirty, markDirty, markClean } = useUnsavedChanges();
 
   const initialScores: Record<string, number> = {};
   const initialComments: Record<string, string> = {};
@@ -74,10 +79,12 @@ export function DiagnosticForm({
 
   const handleScoreChange = (questionId: string, value: string) => {
     setScores((prev) => ({ ...prev, [questionId]: Number(value) }));
+    markDirty();
   };
 
   const handleCommentChange = (questionId: string, value: string) => {
     setComments((prev) => ({ ...prev, [questionId]: value }));
+    markDirty();
   };
 
   const handleSave = () => {
@@ -94,11 +101,15 @@ export function DiagnosticForm({
       return;
     }
 
+    setSaveError(null);
     startTransition(async () => {
       const result = await saveBulkDiagnosticResponses({ caseId, responses });
       if (result.error) {
+        setSaveError(result.error);
         toast.error(result.error);
       } else {
+        markClean();
+        setLastSaved(new Date());
         toast.success("Diagnóstico guardado");
       }
     });
@@ -201,11 +212,7 @@ export function DiagnosticForm({
           );
         })}
 
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={isPending}>
-            {isPending ? "Guardando..." : "Guardar diagnóstico"}
-          </Button>
-        </div>
+        <SaveBar dirty={dirty} saving={isPending} lastSaved={lastSaved} error={saveError} onSave={handleSave} label="Guardar diagnóstico" />
       </div>
 
       <div className="lg:col-span-1">

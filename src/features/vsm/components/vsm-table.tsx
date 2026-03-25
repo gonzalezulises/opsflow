@@ -18,6 +18,8 @@ import { Separator } from "@/components/ui/separator";
 import { calculateVSM, type ProcessStep } from "@/lib/calculations/vsm";
 import { VSMSummary } from "./vsm-summary";
 import { saveAllProcessSteps } from "@/server/actions/vsm";
+import { SaveBar } from "@/components/shared/save-bar";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { toast } from "sonner";
 
 interface StepRow {
@@ -75,6 +77,9 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
     initialSteps.length > 0 ? initialSteps.map(dbToRow) : [],
   );
   const [isPending, startTransition] = useTransition();
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { dirty, markDirty, markClean } = useUnsavedChanges();
   const [mode, setMode] = useState<"lean_correct" | "compatibility">(
     "lean_correct"
   );
@@ -100,8 +105,9 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
       setSteps((prev) =>
         prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
       );
+      markDirty();
     },
-    []
+    [markDirty]
   );
 
   const addStep = useCallback(() => {
@@ -119,11 +125,13 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
         observations: "",
       },
     ]);
-  }, []);
+    markDirty();
+  }, [markDirty]);
 
   const deleteStep = useCallback((id: string) => {
     setSteps((prev) => prev.filter((s) => s.id !== id));
-  }, []);
+    markDirty();
+  }, [markDirty]);
 
   const handleNumericChange = useCallback(
     (id: string, field: keyof StepRow, rawValue: string) => {
@@ -134,6 +142,7 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
   );
 
   const handleSave = useCallback(() => {
+    setSaveError(null);
     startTransition(async () => {
       const dbSteps = steps.map((s, index) => ({
         caseId,
@@ -149,12 +158,15 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
       }));
       const result = await saveAllProcessSteps(caseId, dbSteps);
       if (result.error) {
+        setSaveError(result.error);
         toast.error(result.error);
       } else {
+        markClean();
+        setLastSaved(new Date());
         toast.success("VSM guardado");
       }
     });
-  }, [steps, caseId]);
+  }, [steps, caseId, markClean]);
 
   return (
     <div className="space-y-6">
@@ -336,13 +348,12 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
               </TableBody>
             </Table>
           </div>
-          <div className="mt-4 flex gap-2">
-            <Button variant="outline" size="sm" onClick={addStep}>
-              Agregar paso
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={isPending}>
-              {isPending ? "Guardando..." : "Guardar"}
-            </Button>
+          <div className="mt-4">
+            <SaveBar dirty={dirty} saving={isPending} lastSaved={lastSaved} error={saveError} onSave={handleSave} label="Guardar VSM">
+              <Button variant="outline" size="sm" onClick={addStep}>
+                Agregar paso
+              </Button>
+            </SaveBar>
           </div>
         </CardContent>
       </Card>
