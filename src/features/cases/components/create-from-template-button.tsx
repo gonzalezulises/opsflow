@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { createCaseFromTemplate } from "@/server/actions/cases";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface CreateFromTemplateButtonProps {
   templateId: string;
@@ -24,6 +25,10 @@ export function CreateFromTemplateButton({
         templateId,
         `Copia de ${templateName}`,
       );
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
       if (result.data) {
         router.push(`/dashboard/cases/${result.data.id}/context`);
       }
