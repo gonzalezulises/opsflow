@@ -205,6 +205,7 @@ export async function createCase(data: z.input<typeof createCaseSchema>) {
   try {
     const [row] = await db.insert(cases).values(parsed.data).returning();
     revalidatePath("/dashboard/cases");
+    revalidatePath("/dashboard");
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -225,6 +226,7 @@ export async function createBlankCase(name: string) {
       .returning();
 
     revalidatePath("/dashboard/cases");
+    revalidatePath("/dashboard");
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -452,6 +454,7 @@ export async function createCaseFromTemplate(
     });
 
     revalidatePath("/dashboard/cases");
+    revalidatePath("/dashboard");
     return { data: result };
   } catch (e) {
     return { error: (e as Error).message };
@@ -481,6 +484,7 @@ export async function updateCase(
     if (!row) return { error: "Caso no encontrado" };
 
     revalidatePath("/dashboard/cases");
+    revalidatePath("/dashboard");
     revalidatePath(`/dashboard/cases/${id}`);
     return { data: row };
   } catch (e) {
@@ -499,6 +503,7 @@ export async function deleteCase(id: string) {
     if (!row) return { error: "Caso no encontrado" };
 
     revalidatePath("/dashboard/cases");
+    revalidatePath("/dashboard");
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };

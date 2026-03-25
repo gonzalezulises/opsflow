@@ -82,6 +82,44 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      {/* Mis casos */}
+      {casesList.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">Mis casos</h2>
+            <Link href="/dashboard/cases" className="text-sm text-primary hover:underline">
+              Ver todos
+            </Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {casesList.map((c) => (
+              <Link key={c.id} href={`/dashboard/cases/${c.id}/context`}>
+                <Card className="transition-colors hover:bg-muted/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{c.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm text-muted-foreground">{c.companyName ?? "Sin empresa"}</p>
+                    <div className="flex items-center gap-2">
+                      {c.sector && (
+                        <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium">{c.sector}</span>
+                      )}
+                      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+                        c.status === "in_progress" ? "bg-primary/10 text-primary" :
+                        c.status === "completed" ? "bg-emerald-500/10 text-emerald-700" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {c.status === "draft" ? "Borrador" : c.status === "in_progress" ? "En progreso" : "Completado"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
