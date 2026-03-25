@@ -111,8 +111,8 @@ export const CASE_MODULES: ModuleDefinition[] = [
 ];
 
 export const NAV_ITEMS = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
   { label: "Metodología", icon: GraduationCap, path: "/dashboard/methodology" },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
   { label: "Casos", icon: FileText, path: "/dashboard/cases" },
   { label: "Recursos", icon: Library, path: "/dashboard/resources" },
   { label: "Equipo", icon: Users, path: "/dashboard/team" },
