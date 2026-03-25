@@ -8,7 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { updateCase } from "@/server/actions/cases";
-import { Loader2, Check, Plus, Trash2 } from "lucide-react";
+import { SaveBar } from "@/components/shared/save-bar";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface CaseData {
   id: string;
@@ -68,7 +71,9 @@ function migrateMetrics(m: MetricsShape) {
 
 export function CaseContextForm({ caseData }: CaseContextFormProps) {
   const [isPending, startTransition] = useTransition();
-  const [saved, setSaved] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { dirty, markDirty, markClean } = useUnsavedChanges();
 
   const raw = parseMetrics(caseData.metrics);
   const metrics = migrateMetrics(raw);
@@ -82,21 +87,24 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
       ...prev,
       { id: crypto.randomUUID(), name: "", value: "", unit: "%", description: "" },
     ]);
+    markDirty();
   }
 
   function updateCustomMetric(id: string, field: keyof CustomMetric, val: string) {
     setCustomMetrics((prev) =>
       prev.map((m) => (m.id === id ? { ...m, [field]: val } : m))
     );
+    markDirty();
   }
 
   function removeCustomMetric(id: string) {
     setCustomMetrics((prev) => prev.filter((m) => m.id !== id));
+    markDirty();
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaved(false);
+    setSaveError(null);
 
     const form = new FormData(e.currentTarget);
 
@@ -111,7 +119,7 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
     };
 
     startTransition(async () => {
-      await updateCase(caseData.id, {
+      const result = await updateCase(caseData.id, {
         name: (form.get("name") as string) || caseData.name,
         companyName: (form.get("companyName") as string) || undefined,
         sector: (form.get("sector") as string) || undefined,
@@ -120,13 +128,19 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
         locale: (form.get("locale") as string) || undefined,
         metrics: updatedMetrics,
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      if (result.error) {
+        setSaveError(result.error);
+        toast.error(result.error);
+      } else {
+        markClean();
+        setLastSaved(new Date());
+        toast.success("Contexto guardado");
+      }
     });
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} onChange={markDirty}>
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -390,14 +404,26 @@ export function CaseContextForm({ caseData }: CaseContextFormProps) {
           </Card>
         </div>
 
-        <div className="flex items-center justify-end gap-3 lg:col-span-2">
-          {saved && (
-            <span className="flex items-center gap-1 text-sm text-green-600">
-              <Check className="size-4" />
-              Guardado
-            </span>
-          )}
-          <Button type="submit" disabled={isPending}>
+        <div className="flex flex-wrap items-center justify-end gap-3 lg:col-span-2">
+          <div className="mr-auto flex items-center gap-2 text-sm">
+            {saveError && (
+              <span className="flex items-center gap-1 text-destructive">
+                <Loader2 className="size-3.5" />
+                {saveError}
+              </span>
+            )}
+            {!saveError && lastSaved && !dirty && (
+              <span className="flex items-center gap-1 text-emerald-600">
+                Guardado
+              </span>
+            )}
+            {dirty && !isPending && (
+              <span className="font-medium text-amber-600">
+                Cambios sin guardar
+              </span>
+            )}
+          </div>
+          <Button type="submit" disabled={isPending || (!dirty && !saveError)}>
             {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
             Guardar contexto
           </Button>
