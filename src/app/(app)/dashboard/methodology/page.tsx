@@ -1,5 +1,8 @@
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Workflow,
   Eye,
@@ -13,7 +16,6 @@ import {
   ListOrdered,
   CalendarDays,
   Target,
-  ExternalLink,
   CheckCircle2,
   XCircle,
   ArrowRight,
@@ -180,7 +182,7 @@ function VerdictBadge({ verdict }: { verdict: boolean | string }) {
 
 export default function MethodologyPage() {
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       {/* Header */}
       <div>
         <Badge variant="outline" className="mb-3">
@@ -195,217 +197,220 @@ export default function MethodologyPage() {
         </p>
       </div>
 
-      {/* ─── SECCIÓN 1: Principios ─── */}
-      <section>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-            <Target className="size-5 text-primary" />
-          </div>
-          <div>
+      {/* Tabs */}
+      <Tabs defaultValue="principios">
+        <TabsList variant="line" className="w-full justify-start border-b pb-0">
+          <TabsTrigger value="principios" className="gap-1.5">
+            <Target className="size-4" />
+            Principios
+          </TabsTrigger>
+          <TabsTrigger value="modelos" className="gap-1.5">
+            <Layers className="size-4" />
+            Modelos
+          </TabsTrigger>
+          <TabsTrigger value="justificacion" className="gap-1.5">
+            <Lightbulb className="size-4" />
+            Justificación
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ─── TAB 1: Principios ─── */}
+        <TabsContent value="principios" className="pt-6">
+          <div className="mb-6">
             <h2 className="text-xl font-bold">5 principios de la optimización operativa</h2>
             <p className="text-sm text-muted-foreground">
               Las ideas fundamentales que guían todo el análisis
             </p>
           </div>
-        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {PRINCIPLES.map((p, i) => {
-            const Icon = p.icon;
-            return (
-              <Card key={i} className="relative overflow-hidden">
-                <div className="absolute top-3 right-3 text-4xl font-black text-muted/20">
-                  {i + 1}
-                </div>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex size-8 items-center justify-center rounded-md bg-primary/10">
-                      <Icon className="size-4 text-primary" />
-                    </div>
-                    <CardTitle className="text-base">{p.title}</CardTitle>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {PRINCIPLES.map((p, i) => {
+              const Icon = p.icon;
+              return (
+                <Card key={i} className="relative overflow-hidden">
+                  <div className="absolute top-3 right-3 text-4xl font-black text-muted/20">
+                    {i + 1}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {p.description}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* ─── SECCIÓN 2: Modelos ─── */}
-      <section>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-            <Layers className="size-5 text-primary" />
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex size-8 items-center justify-center rounded-md bg-primary/10">
+                        <Icon className="size-4 text-primary" />
+                      </div>
+                      <CardTitle className="text-base">{p.title}</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {p.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
-          <div>
+        </TabsContent>
+
+        {/* ─── TAB 2: Modelos ─── */}
+        <TabsContent value="modelos" className="pt-6">
+          <div className="mb-6">
             <h2 className="text-xl font-bold">7 modelos que usamos</h2>
             <p className="text-sm text-muted-foreground">
               Cada módulo del bootcamp se apoya en un modelo probado
             </p>
           </div>
-        </div>
 
-        <div className="space-y-3">
-          {MODELS.map((m, i) => {
-            const Icon = m.icon;
-            return (
-              <Card key={i}>
-                <CardContent className="flex items-start gap-4 p-4">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <Icon className="size-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold">{m.name}</h3>
-                      <span className="text-xs text-muted-foreground">— {m.author}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {m.role}
-                      </Badge>
+          <div className="space-y-3">
+            {MODELS.map((m, i) => {
+              const Icon = m.icon;
+              return (
+                <Card key={i}>
+                  <CardContent className="flex items-start gap-4 p-4">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <Icon className="size-5 text-primary" />
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-                      {m.description}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="shrink-0 text-xs hidden sm:flex">
-                    {m.usedIn}
-                  </Badge>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Flujo visual */}
-        <Card className="mt-6 border-primary/20 bg-primary/[0.02]">
-          <CardContent className="p-6">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-4">
-              Cómo se conectan en el bootcamp
-            </p>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="secondary" className="gap-1">
-                <ClipboardCheck className="size-3" />
-                Madurez (CMMI)
-              </Badge>
-              <ArrowRight className="size-3 text-muted-foreground" />
-              <Badge variant="secondary" className="gap-1">
-                <GitBranch className="size-3" />
-                Mapeo (VSM)
-              </Badge>
-              <ArrowRight className="size-3 text-muted-foreground" />
-              <Badge variant="secondary" className="gap-1">
-                <ShieldAlert className="size-3" />
-                Riesgos (ISO 31000)
-              </Badge>
-              <ArrowRight className="size-3 text-muted-foreground" />
-              <Badge variant="secondary" className="gap-1">
-                <DollarSign className="size-3" />
-                Costo (COPQ)
-              </Badge>
-              <ArrowRight className="size-3 text-muted-foreground" />
-              <Badge variant="secondary" className="gap-1">
-                <ListOrdered className="size-3" />
-                Priorizar (Matriz)
-              </Badge>
-              <ArrowRight className="size-3 text-muted-foreground" />
-              <Badge variant="secondary" className="gap-1">
-                <CalendarDays className="size-3" />
-                Actuar (PDCA)
-              </Badge>
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Cada modelo alimenta al siguiente: el diagnóstico orienta el VSM, el VSM revela riesgos,
-              los riesgos y el costo justifican la priorización, y la priorización genera el plan de acción.
-            </p>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* ─── SECCIÓN 3: ¿Por qué esta y no otra? ─── */}
-      <section>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-            <Lightbulb className="size-5 text-primary" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold">{m.name}</h3>
+                        <span className="text-xs text-muted-foreground">— {m.author}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {m.role}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                        {m.description}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 text-xs hidden sm:flex">
+                      {m.usedIn}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
-          <div>
+
+          {/* Flujo visual */}
+          <Card className="mt-6 border-primary/20 bg-primary/[0.02]">
+            <CardContent className="p-6">
+              <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-4">
+                Cómo se conectan en el bootcamp
+              </p>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge variant="secondary" className="gap-1">
+                  <ClipboardCheck className="size-3" />
+                  Madurez (CMMI)
+                </Badge>
+                <ArrowRight className="size-3 text-muted-foreground" />
+                <Badge variant="secondary" className="gap-1">
+                  <GitBranch className="size-3" />
+                  Mapeo (VSM)
+                </Badge>
+                <ArrowRight className="size-3 text-muted-foreground" />
+                <Badge variant="secondary" className="gap-1">
+                  <ShieldAlert className="size-3" />
+                  Riesgos (ISO 31000)
+                </Badge>
+                <ArrowRight className="size-3 text-muted-foreground" />
+                <Badge variant="secondary" className="gap-1">
+                  <DollarSign className="size-3" />
+                  Costo (COPQ)
+                </Badge>
+                <ArrowRight className="size-3 text-muted-foreground" />
+                <Badge variant="secondary" className="gap-1">
+                  <ListOrdered className="size-3" />
+                  Priorizar (Matriz)
+                </Badge>
+                <ArrowRight className="size-3 text-muted-foreground" />
+                <Badge variant="secondary" className="gap-1">
+                  <CalendarDays className="size-3" />
+                  Actuar (PDCA)
+                </Badge>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Cada modelo alimenta al siguiente: el diagnóstico orienta el VSM, el VSM revela riesgos,
+                los riesgos y el costo justifican la priorización, y la priorización genera el plan de acción.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ─── TAB 3: Justificación ─── */}
+        <TabsContent value="justificacion" className="pt-6">
+          <div className="mb-6">
             <h2 className="text-xl font-bold">¿Por qué esta metodología y no otra?</h2>
             <p className="text-sm text-muted-foreground">
               Hay muchos marcos de mejora — pero no todos son viables en 6 horas con datos reales
             </p>
           </div>
-        </div>
 
-        <div className="space-y-3">
-          {COMPARISONS.map((c, i) => (
-            <Card
-              key={i}
-              className={
-                c.verdict === true
-                  ? "border-emerald-500/30 bg-emerald-500/[0.03]"
-                  : ""
-              }
-            >
-              <CardContent className="flex items-start gap-4 p-4">
-                <div className="pt-0.5">
-                  <VerdictBadge verdict={c.verdict} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold">{c.name}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-                    {c.reason}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+          <div className="space-y-3">
+            {COMPARISONS.map((c, i) => (
+              <Card
+                key={i}
+                className={
+                  c.verdict === true
+                    ? "border-emerald-500/30 bg-emerald-500/[0.03]"
+                    : ""
+                }
+              >
+                <CardContent className="flex items-start gap-4 p-4">
+                  <div className="pt-0.5">
+                    <VerdictBadge verdict={c.verdict} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold">{c.name}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                      {c.reason}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
-        {/* Resumen de por qué */}
-        <Card className="mt-6 border-primary/20 bg-primary/[0.02]">
-          <CardContent className="p-6 space-y-3">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wider">
-              En resumen
-            </p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Elegimos esta combinación porque cumple 4 criterios que otras metodologías no logran simultáneamente:
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex gap-2 text-sm">
-                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
-                <span className="text-muted-foreground">
-                  <strong className="text-foreground">Ejecutable en horas, no meses.</strong>{" "}
-                  El equipo genera entregables desde la primera sesión.
-                </span>
+          {/* Resumen */}
+          <Card className="mt-6 border-primary/20 bg-primary/[0.02]">
+            <CardContent className="p-6 space-y-3">
+              <p className="text-xs font-semibold text-primary uppercase tracking-wider">
+                En resumen
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Elegimos esta combinación porque cumple 4 criterios que otras metodologías no logran simultáneamente:
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex gap-2 text-sm">
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <span className="text-muted-foreground">
+                    <strong className="text-foreground">Ejecutable en horas, no meses.</strong>{" "}
+                    El equipo genera entregables desde la primera sesión.
+                  </span>
+                </div>
+                <div className="flex gap-2 text-sm">
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <span className="text-muted-foreground">
+                    <strong className="text-foreground">Basada en datos reales.</strong>{" "}
+                    No ejercicios académicos — cada participante trabaja con su proceso.
+                  </span>
+                </div>
+                <div className="flex gap-2 text-sm">
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <span className="text-muted-foreground">
+                    <strong className="text-foreground">Contextualizada para Latam.</strong>{" "}
+                    Incluye riesgos exógenos (energía, reposición, talento) que otros marcos ignoran.
+                  </span>
+                </div>
+                <div className="flex gap-2 text-sm">
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <span className="text-muted-foreground">
+                    <strong className="text-foreground">Genera un plan de 30 días.</strong>{" "}
+                    El entregable final es accionable, medible y con contingencias.
+                  </span>
+                </div>
               </div>
-              <div className="flex gap-2 text-sm">
-                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
-                <span className="text-muted-foreground">
-                  <strong className="text-foreground">Basada en datos reales.</strong>{" "}
-                  No ejercicios académicos — cada participante trabaja con su proceso.
-                </span>
-              </div>
-              <div className="flex gap-2 text-sm">
-                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
-                <span className="text-muted-foreground">
-                  <strong className="text-foreground">Contextualizada para Latam.</strong>{" "}
-                  Incluye riesgos exógenos (energía, reposición, talento) que otros marcos ignoran.
-                </span>
-              </div>
-              <div className="flex gap-2 text-sm">
-                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
-                <span className="text-muted-foreground">
-                  <strong className="text-foreground">Genera un plan de 30 días.</strong>{" "}
-                  El entregable final es accionable, medible y con contingencias.
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -45,7 +45,7 @@ export default function HomePage() {
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">
-            <Link href="/dashboard">
+            <Link href="/dashboard/methodology">
               <Button size="lg" className="bg-white text-[oklch(0.22_0.08_250)] hover:bg-white/90 font-semibold">
                 Entrar al bootcamp
                 <ArrowRight className="ml-2 size-4" />
@@ -257,7 +257,7 @@ export default function HomePage() {
         <h2 className="text-2xl font-bold">¿Listo para empezar?</h2>
         <p className="mt-2 text-muted-foreground">Entra a la plataforma y comienza con tu caso</p>
         <div className="mt-6">
-          <Link href="/dashboard">
+          <Link href="/dashboard/methodology">
             <Button size="lg">
               Entrar al bootcamp
               <ArrowRight className="ml-2 size-4" />
