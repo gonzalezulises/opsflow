@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AIPanel } from "@/components/shared/ai-panel";
 import {
@@ -15,6 +16,7 @@ import {
   ListOrdered,
   CalendarDays,
   BarChart3,
+  Printer,
 } from "lucide-react";
 import type { MaturityLevel } from "@/lib/calculations/diagnostic";
 
@@ -61,7 +63,11 @@ export interface ReportData {
   totalWasteCost: number;
   wasteCount: number;
   attackNow: { name: string; score: number }[];
+  allInitiatives: { name: string; score: number; classification: string }[];
   initiativesCount: number;
+  topRisks: { description: string; type: string; exposure: number }[];
+  topWasteItems: { problem: string; totalCostMonthly: number }[];
+  actionsList: { action: string; responsible: string; status: string }[];
   plan: {
     totalActions: number;
     completedActions: number;
@@ -144,16 +150,30 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
 
   return (
     <div className="space-y-6" id="executive-report">
-      <div className="flex items-center justify-between">
+      {/* Print-only header */}
+      <div className="hidden print:block mb-6 border-b pb-4">
+        <h1 className="text-2xl font-bold">Reporte Ejecutivo — {data.case.companyName}</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {data.case.sector} | {data.case.processFocus} | {new Date().toLocaleDateString("es", { year: "numeric", month: "long", day: "numeric" })}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h3 className="text-lg font-semibold">Resumen ejecutivo</h3>
           <p className="text-sm text-muted-foreground">{moduleCount} de 6 módulos completados</p>
         </div>
-        <AIPanel
-          module="Reporte ejecutivo"
-          actions={[{ type: "executive_report", label: "Generar narrativa IA" }]}
-          contextBuilder={buildContext}
-        />
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer className="mr-2 size-4" />
+            Imprimir / PDF
+          </Button>
+          <AIPanel
+            module="Reporte ejecutivo"
+            actions={[{ type: "executive_report", label: "Generar narrativa IA" }]}
+            contextBuilder={buildContext}
+          />
+        </div>
       </div>
 
       {/* Caso + Diagnóstico */}
@@ -429,6 +449,154 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
           </CardContent>
         </Card>
       )}
+
+      {/* ─── Detailed sections (visible in print, collapsible on screen) ─── */}
+      <Separator className="print:hidden" />
+
+      {/* Risks detail */}
+      {data.topRisks.length > 0 && (
+        <Card className="print:break-before">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldAlert className="size-4" />
+              Riesgos identificados (top {data.topRisks.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">#</th>
+                  <th className="pb-2 font-medium">Riesgo</th>
+                  <th className="pb-2 font-medium">Tipo</th>
+                  <th className="pb-2 font-medium text-right">Exposición</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.topRisks.map((r, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-1.5 text-muted-foreground">{i + 1}</td>
+                    <td className="py-1.5">{r.description}</td>
+                    <td className="py-1.5 text-muted-foreground">{r.type}</td>
+                    <td className="py-1.5 text-right font-medium">{r.exposure}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Waste detail */}
+      {data.topWasteItems.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <DollarSign className="size-4" />
+              Desperdicios (top {data.topWasteItems.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">#</th>
+                  <th className="pb-2 font-medium">Problema</th>
+                  <th className="pb-2 font-medium text-right">Costo mensual</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.topWasteItems.map((w, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-1.5 text-muted-foreground">{i + 1}</td>
+                    <td className="py-1.5">{w.problem}</td>
+                    <td className="py-1.5 text-right font-medium">{fmtMoney(w.totalCostMonthly, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Initiatives detail */}
+      {data.allInitiatives.length > 0 && (
+        <Card className="print:break-before">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ListOrdered className="size-4" />
+              Iniciativas priorizadas ({data.allInitiatives.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">#</th>
+                  <th className="pb-2 font-medium">Iniciativa</th>
+                  <th className="pb-2 font-medium text-right">Score</th>
+                  <th className="pb-2 font-medium text-right">Clasificación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.allInitiatives.map((init, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-1.5 text-muted-foreground">{i + 1}</td>
+                    <td className="py-1.5">{init.name}</td>
+                    <td className="py-1.5 text-right font-medium">{fmt(init.score)}</td>
+                    <td className="py-1.5 text-right">
+                      <Badge variant={init.classification === "Atacar ya" ? "default" : "outline"} className="text-xs">
+                        {init.classification}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Action plan detail */}
+      {data.actionsList.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="size-4" />
+              Plan de acción — detalle ({data.actionsList.length} acciones)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">#</th>
+                  <th className="pb-2 font-medium">Acción</th>
+                  <th className="pb-2 font-medium">Responsable</th>
+                  <th className="pb-2 font-medium text-right">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.actionsList.map((a, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="py-1.5 text-muted-foreground">{i + 1}</td>
+                    <td className="py-1.5">{a.action}</td>
+                    <td className="py-1.5 text-muted-foreground">{a.responsible || "—"}</td>
+                    <td className="py-1.5 text-right text-xs">
+                      {a.status === "completed" ? "Completada" : a.status === "in_progress" ? "En progreso" : a.status === "blocked" ? "Bloqueada" : "Pendiente"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Print footer */}
+      <div className="hidden print:block mt-8 pt-4 border-t text-center text-xs text-muted-foreground">
+        <p>Generado con OpsFlow — Bootcamp de Optimización Operativa IESA — {new Date().toLocaleDateString("es", { year: "numeric", month: "long", day: "numeric" })}</p>
+      </div>
     </div>
   );
 }

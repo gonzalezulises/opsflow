@@ -178,7 +178,26 @@ export default async function ReportPage({
     totalWasteCost,
     wasteCount: wasteItems.length,
     attackNow: attackNow.map((i) => ({ name: i.name, score: i.totalScore })),
+    allInitiatives: scoredInitiatives.map((i) => ({
+      name: i.name,
+      score: i.totalScore,
+      classification: i.classification,
+    })),
     initiativesCount: initiatives.length,
+    topRisks: rankedRisks.slice(0, 5).map((r) => ({
+      description: r.riskDescription,
+      type: r.riskType ?? "Otro",
+      exposure: r.exposure,
+    })),
+    topWasteItems: rankedWaste.slice(0, 5).map((w) => ({
+      problem: w.problemDescription,
+      totalCostMonthly: w.totalCostMonthly,
+    })),
+    actionsList: actions.map((a) => ({
+      action: a.actionDescription,
+      responsible: a.responsible ?? "",
+      status: a.status,
+    })),
     plan: { totalActions, completedActions, blockedActions, progressPct },
     lastWeek: lastWeek
       ? {

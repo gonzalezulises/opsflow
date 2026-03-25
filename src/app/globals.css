@@ -128,3 +128,60 @@
     @apply font-sans;
   }
 }
+
+/* ─── Print styles ─── */
+@media print {
+  /* Hide chrome */
+  header,
+  footer,
+  nav,
+  [data-slot="sheet-content"],
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Reset page */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Cards print flat */
+  [data-slot="card"] {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    background: white !important;
+    break-inside: avoid;
+  }
+
+  /* Badges print inline */
+  [data-slot="badge"] {
+    border: 1px solid #999 !important;
+    background: transparent !important;
+    color: black !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Grids go single column at narrow widths */
+  .print\\:grid-cols-1 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Page breaks */
+  .print\\:break-before {
+    break-before: page;
+  }
+
+  /* Show print-only elements */
+  .print\\:block {
+    display: block !important;
+  }
+}
