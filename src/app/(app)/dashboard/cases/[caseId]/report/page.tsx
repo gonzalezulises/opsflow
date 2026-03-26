@@ -10,7 +10,7 @@ import { getInitiatives } from "@/server/actions/prioritization";
 import { getActionItems } from "@/server/actions/plan";
 import { getWeeklyMetrics } from "@/server/actions/tracking";
 import { calculateDiagnostic } from "@/lib/calculations/diagnostic";
-import { calculateVSM } from "@/lib/calculations/vsm";
+import { calculateVSM, compareVSM, diffSteps, generateImprovementNarrative } from "@/lib/calculations/vsm";
 import { calculateExposure, getRiskLevel } from "@/lib/calculations/risk";
 import { calculateWasteCost } from "@/lib/calculations/waste";
 import { calculatePrioritizationScore } from "@/lib/calculations/prioritization";
@@ -26,6 +26,7 @@ export default async function ReportPage({
     caseResult,
     diagnosticResult,
     stepsResult,
+    futureStepsResult,
     risksResult,
     wasteResult,
     initiativesResult,
@@ -34,7 +35,8 @@ export default async function ReportPage({
   ] = await Promise.all([
     getCase(caseId),
     getDiagnosticResponses(caseId),
-    getProcessSteps(caseId),
+    getProcessSteps(caseId, "current"),
+    getProcessSteps(caseId, "future"),
     getRiskItems(caseId),
     getWasteItems(caseId),
     getInitiatives(caseId),
@@ -45,6 +47,7 @@ export default async function ReportPage({
   const caseData = caseResult.data;
   const diagnosticResponses = diagnosticResult.data ?? [];
   const steps = stepsResult.data ?? [];
+  const futureSteps = futureStepsResult.data ?? [];
   const risks = risksResult.data ?? [];
   const wasteItems = wasteResult.data ?? [];
   const initiatives = initiativesResult.data ?? [];
@@ -66,6 +69,53 @@ export default async function ReportPage({
         }))
       )
     : null;
+
+  // Future VSM + improvement narrative
+  const futureVsm = futureSteps.length > 0
+    ? calculateVSM(
+        futureSteps.map((s) => ({
+          processTimeMinutes: Number(s.processTimeMinutes),
+          waitTimeHours: Number(s.waitTimeHours),
+          addsValue: s.addsValue ?? false,
+          reworkPercentage: Number(s.reworkPercentage ?? 0),
+        }))
+      )
+    : null;
+
+  let improvementData: {
+    headline: string;
+    bullets: string[];
+    topChanges: { step: string; description: string; justification: string }[];
+    metrics: { label: string; current: number; future: number; delta: number; deltaPct: number; unit: string; improved: boolean }[];
+  } | null = null;
+
+  if (vsm && futureVsm) {
+    const comp = compareVSM(vsm, futureVsm);
+    const currentRaw = steps.map((s) => ({
+      id: s.id, stepName: s.stepName,
+      processTimeMinutes: Number(s.processTimeMinutes) || 0,
+      waitTimeHours: Number(s.waitTimeHours) || 0,
+      reworkPercentage: Number(s.reworkPercentage ?? 0),
+      sourceStepId: s.sourceStepId, justification: s.justification ?? "",
+      linkedInitiativeIds: (s.linkedInitiativeIds as string[]) ?? [],
+    }));
+    const futureRaw = futureSteps.map((s) => ({
+      id: s.id, stepName: s.stepName,
+      processTimeMinutes: Number(s.processTimeMinutes) || 0,
+      waitTimeHours: Number(s.waitTimeHours) || 0,
+      reworkPercentage: Number(s.reworkPercentage ?? 0),
+      sourceStepId: s.sourceStepId, justification: s.justification ?? "",
+      linkedInitiativeIds: (s.linkedInitiativeIds as string[]) ?? [],
+    }));
+    const diffs = diffSteps(currentRaw, futureRaw);
+    const narr = generateImprovementNarrative(comp, diffs);
+    improvementData = {
+      headline: narr.headline,
+      bullets: narr.bullets,
+      topChanges: narr.topChanges,
+      metrics: comp.metrics,
+    };
+  }
 
   // Bottleneck
   const bottleneck = steps.length > 0
@@ -198,6 +248,7 @@ export default async function ReportPage({
       responsible: a.responsible ?? "",
       status: a.status,
     })),
+    improvement: improvementData,
     plan: { totalActions, completedActions, blockedActions, progressPct },
     lastWeek: lastWeek
       ? {

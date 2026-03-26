@@ -68,6 +68,12 @@ export interface ReportData {
   topRisks: { description: string; type: string; exposure: number }[];
   topWasteItems: { problem: string; totalCostMonthly: number }[];
   actionsList: { action: string; responsible: string; status: string }[];
+  improvement: {
+    headline: string;
+    bullets: string[];
+    topChanges: { step: string; description: string; justification: string }[];
+    metrics: { label: string; current: number; future: number; delta: number; deltaPct: number; unit: string; improved: boolean }[];
+  } | null;
   plan: {
     totalActions: number;
     completedActions: number;
@@ -373,6 +379,71 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
           )}
         </CardContent>
       </Card>
+
+      {/* Improvement narrative */}
+      {data.improvement && (
+        <Card className="border-primary/20 bg-primary/[0.02] print:break-before">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <TrendingDown className="size-4 text-primary" />
+              Propuesta de mejora — Estado futuro
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm font-medium leading-relaxed">{data.improvement.headline}</p>
+
+            {data.improvement.bullets.length > 0 && (
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                {data.improvement.bullets.map((b, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="shrink-0 text-primary">—</span>
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Metrics comparison table */}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-bold">Métrica</th>
+                  <th className="pb-2 font-bold text-right">Actual</th>
+                  <th className="pb-2 font-bold text-right">Futuro</th>
+                  <th className="pb-2 font-bold text-right">Cambio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.improvement.metrics.map((m) => (
+                  <tr key={m.label} className="border-b last:border-0">
+                    <td className="py-1.5 font-medium">{m.label}</td>
+                    <td className="py-1.5 text-right">{fmt(m.current)} {m.unit}</td>
+                    <td className="py-1.5 text-right">{fmt(m.future)} {m.unit}</td>
+                    <td className={`py-1.5 text-right font-medium ${m.improved ? "text-emerald-600" : m.delta !== 0 ? "text-destructive" : ""}`}>
+                      {m.delta > 0 ? "+" : ""}{fmt(m.delta)} ({m.deltaPct > 0 ? "+" : ""}{fmt(m.deltaPct)}%)
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Top changes with justifications */}
+            {data.improvement.topChanges.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-primary">Cambios principales</p>
+                {data.improvement.topChanges.map((c, i) => (
+                  <div key={i} className="rounded-lg border p-3 text-sm">
+                    <p><strong>{c.step}</strong> — {c.description}</p>
+                    {c.justification && (
+                      <p className="mt-1 text-muted-foreground italic">&ldquo;{c.justification}&rdquo;</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Separator />
 
