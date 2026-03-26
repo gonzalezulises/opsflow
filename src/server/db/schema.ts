@@ -305,6 +305,30 @@ export const processSteps = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// 9b. process_step_initiatives (join table)
+// ---------------------------------------------------------------------------
+
+export const processStepInitiatives = pgTable(
+  "process_step_initiatives",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    processStepId: uuid("process_step_id")
+      .notNull()
+      .references(() => processSteps.id, { onDelete: "cascade" }),
+    initiativeId: uuid("initiative_id")
+      .notNull()
+      .references(() => initiatives.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("psi_step_id_idx").on(t.processStepId),
+    index("psi_initiative_id_idx").on(t.initiativeId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // 10. risk_items
 // ---------------------------------------------------------------------------
 
