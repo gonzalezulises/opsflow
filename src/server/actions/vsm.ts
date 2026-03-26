@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { db } from "@/server/db";
-import { processSteps, processStepInitiatives } from "@/server/db/schema";
+import { processSteps, processStepInitiatives, initiatives } from "@/server/db/schema";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,16 +144,43 @@ export async function saveAllProcessSteps(
         .values(validatedSteps)
         .returning();
 
-      // Dual-write: sync join table from linkedInitiativeIds
-      const inserts: { processStepId: string; initiativeId: string }[] = [];
-      for (let i = 0; i < rows.length; i++) {
-        const ids = (rows[i].linkedInitiativeIds as string[] | null) ?? [];
-        for (const initId of ids) {
-          inserts.push({ processStepId: rows[i].id, initiativeId: initId });
+      // Dual-write: sync join table from linkedInitiativeIds (best-effort, non-blocking)
+      try {
+        const allInitIds = new Set<string>();
+        for (const row of rows) {
+          const ids = (row.linkedInitiativeIds as string[] | null) ?? [];
+          for (const id of ids) allInitIds.add(id);
         }
-      }
-      if (inserts.length > 0) {
-        await tx.insert(processStepInitiatives).values(inserts);
+
+        // Only insert for initiative IDs that actually exist
+        let validInitIds = new Set<string>();
+        if (allInitIds.size > 0) {
+          const existing = await tx
+            .select({ id: initiatives.id })
+            .from(initiatives)
+            .where(
+              sql`${initiatives.id} IN (${sql.join(
+                Array.from(allInitIds).map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+            );
+          validInitIds = new Set(existing.map((e) => e.id));
+        }
+
+        const inserts: { processStepId: string; initiativeId: string }[] = [];
+        for (const row of rows) {
+          const ids = (row.linkedInitiativeIds as string[] | null) ?? [];
+          for (const initId of ids) {
+            if (validInitIds.has(initId)) {
+              inserts.push({ processStepId: row.id, initiativeId: initId });
+            }
+          }
+        }
+        if (inserts.length > 0) {
+          await tx.insert(processStepInitiatives).values(inserts);
+        }
+      } catch {
+        // Non-critical: join table sync failure shouldn't block VSM save
       }
 
       return rows;
