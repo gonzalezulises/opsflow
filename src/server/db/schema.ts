@@ -44,6 +44,8 @@ export const caseStatusEnum = pgEnum("case_status", [
   "completed",
 ]);
 
+export const vsmStateEnum = pgEnum("vsm_state", ["current", "future"]);
+
 export const actionItemStatusEnum = pgEnum("action_item_status", [
   "pending",
   "in_progress",
@@ -271,6 +273,9 @@ export const processSteps = pgTable(
     wip: integer("wip"),
     addsValue: boolean("adds_value"),
     observations: text("observations"),
+    vsmState: vsmStateEnum("vsm_state").notNull().default("current"),
+    sourceStepId: uuid("source_step_id"),
+    justification: text("justification"),
   },
   (t) => [
     index("process_steps_case_id_idx").on(t.caseId),
