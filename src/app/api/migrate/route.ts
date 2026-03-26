@@ -69,7 +69,46 @@ export async function GET() {
       await db.execute(sql`ALTER TABLE "process_steps" ADD COLUMN "scenario_id" uuid`);
     }
 
-    return NextResponse.json({ status: "ok", message: "All migrations applied" });
+    // Migration 0004: process_step_initiatives join table
+    const psiTableCheck = await db.execute(
+      sql`SELECT 1 FROM information_schema.tables WHERE table_name = 'process_step_initiatives'`
+    );
+    if ((psiTableCheck as unknown as unknown[]).length === 0) {
+      await db.execute(sql`
+        CREATE TABLE "process_step_initiatives" (
+          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+          "process_step_id" uuid NOT NULL REFERENCES "process_steps"("id") ON DELETE CASCADE,
+          "initiative_id" uuid NOT NULL REFERENCES "initiatives"("id") ON DELETE CASCADE,
+          "created_at" timestamp with time zone DEFAULT now() NOT NULL
+        )
+      `);
+      await db.execute(sql`CREATE INDEX "psi_step_id_idx" ON "process_step_initiatives" USING btree ("process_step_id")`);
+      await db.execute(sql`CREATE INDEX "psi_initiative_id_idx" ON "process_step_initiatives" USING btree ("initiative_id")`);
+    }
+
+    // Backfill: sync linkedInitiativeIds → process_step_initiatives
+    const stepsWithLinks = await db.execute(
+      sql`SELECT id, linked_initiative_ids FROM process_steps WHERE linked_initiative_ids IS NOT NULL AND linked_initiative_ids != '[]'::jsonb AND linked_initiative_ids != 'null'::jsonb`
+    );
+    let backfilled = 0;
+    for (const row of stepsWithLinks as unknown as { id: string; linked_initiative_ids: string[] }[]) {
+      const ids = row.linked_initiative_ids;
+      if (!Array.isArray(ids)) continue;
+      for (const initId of ids) {
+        // Check if already exists to be idempotent
+        const existing = await db.execute(
+          sql`SELECT 1 FROM process_step_initiatives WHERE process_step_id = ${row.id} AND initiative_id = ${initId} LIMIT 1`
+        );
+        if ((existing as unknown as unknown[]).length === 0) {
+          await db.execute(
+            sql`INSERT INTO process_step_initiatives (id, process_step_id, initiative_id) VALUES (gen_random_uuid(), ${row.id}, ${initId})`
+          );
+          backfilled++;
+        }
+      }
+    }
+
+    return NextResponse.json({ status: "ok", message: "All migrations applied", backfilled });
   } catch (error) {
     return NextResponse.json(
       { status: "error", message: (error as Error).message },
