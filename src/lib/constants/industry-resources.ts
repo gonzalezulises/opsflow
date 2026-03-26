@@ -97,12 +97,12 @@ export const INDUSTRY_RESOURCES: IndustrySection[] = [
           "El marco de procesos estándar de la industria telco. Permite mapear cualquier proceso operativo de telecomunicaciones con una taxonomía universal.",
       },
       {
-        title: "Lean Six Sigma in Telecom — Case Studies",
+        title: "Lean Six Sigma — Recursos y herramientas",
         author: "ISIXSIGMA",
-        type: "Caso",
-        url: "https://www.isixsigma.com/industries/telecommunications/",
+        type: "Referencia",
+        url: "https://www.isixsigma.com/",
         description:
-          "Casos reales de Lean Six Sigma aplicados a telcos: reducción de tiempos de provisión, mejora de first-call resolution, optimización de NOC.",
+          "Portal líder en Six Sigma con recursos aplicables a telcos: reducción de tiempos de provisión, mejora de first-call resolution, optimización de NOC.",
       },
       {
         title: "Net Promoter Score (NPS) — Bain & Company",
@@ -133,12 +133,12 @@ export const INDUSTRY_RESOURCES: IndustrySection[] = [
       "El caso 'Pedido a Despacho' aplica directamente al retail: el flujo 'Orden de compra a estante' en una ferretería tiene los mismos desperdicios — pedidos que llegan incompletos, reconteos, devoluciones a proveedor, y un lead time inflado por validaciones que no agregan valor al cliente final.",
     resources: [
       {
-        title: "Lean Retail — Principios aplicados a tienda",
+        title: "Lean Principles in Retail — Transformación real",
         author: "Lean Enterprise Institute",
         type: "Lectura",
-        url: "https://www.lean.org/the-lean-post/articles/lean-retail/",
+        url: "https://www.lean.org/the-lean-post/articles/lean-principles-are-the-bread-butter-of-this-retail-transformation/",
         description:
-          "Cómo aplicar pensamiento Lean en retail: reducir pasos que no agregan valor en el recorrido del producto desde proveedor hasta punto de venta.",
+          "Cómo aplicar pensamiento Lean en retail: caso real de transformación operativa simplificando ofertas, eliminando tareas de bajo valor y mejorando tecnología.",
       },
       {
         title: "Inventory Management Best Practices — APICS",
@@ -149,18 +149,18 @@ export const INDUSTRY_RESOURCES: IndustrySection[] = [
           "Gestión de inventario y cadena de suministro. El quiebre de stock en retail es equivalente al 'despacho incompleto' del caso base.",
       },
       {
-        title: "The Toyota Way in Retail — Tesco Case Study",
-        author: "Varios autores",
+        title: "Lean Thinking in Retail and Service Organizations",
+        author: "Lean Enterprise Institute",
         type: "Caso",
-        url: "https://www.lean.org/the-lean-post/articles/what-can-retail-learn-from-lean/",
+        url: "https://www.lean.org/the-lean-post/articles/the-case-for-lean-thinking-in-retail-and-service-organizations/",
         description:
-          "Cómo Tesco aplicó principios Toyota a su cadena de suministro: reducción de lead time de reposición, mejora de disponibilidad en estante.",
+          "Josh Howell (LEI) explica cómo aplicar lean thinking en organizaciones de retail y servicios: respeto por las personas y mejora continua en tienda.",
       },
       {
         title: "Loss Prevention & Shrinkage — NRF",
         author: "National Retail Federation",
         type: "Guía",
-        url: "https://nrf.com/research/national-retail-security-survey",
+        url: "https://nrf.com/research/the-impact-of-retail-theft-violence-2025",
         description:
           "Las pérdidas por merma en retail son un desperdicio directo. Equivalente al 'costo del desperdicio' del módulo 5: cuánto pierde la tienda por errores operativos.",
       },
@@ -188,7 +188,7 @@ export const INDUSTRY_RESOURCES: IndustrySection[] = [
         title: "Process Mining in Insurance — Celonis",
         author: "Celonis",
         type: "Herramienta",
-        url: "https://www.celonis.com/industries/insurance/",
+        url: "https://www.celonis.com/solutions/insurance",
         description:
           "Process mining como VSM digital: mapear automáticamente el flujo real de una póliza o siniestro a partir de datos del sistema.",
       },

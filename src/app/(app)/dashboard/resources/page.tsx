@@ -18,11 +18,11 @@ const BOOTCAMP_RESOURCES = [
         description: "El libro fundacional de Value Stream Mapping. Explica cómo mapear el estado actual y diseñar el estado futuro.",
       },
       {
-        title: "Value Stream Mapping Explained in Under 10 Minutes",
+        title: "Introduction to Value Stream Mapping — Jim Womack",
         author: "Lean Enterprise Institute",
         type: "Video",
-        url: "https://www.youtube.com/watch?v=SlMWCnDBhBo",
-        description: "Introducción visual al VSM: qué es, por qué importa y cómo empezar.",
+        url: "https://www.youtube.com/watch?v=O--ZVqQvaA8",
+        description: "Jim Womack (LEI) explica el propósito del VSM, su historia desde Ford hasta Toyota, y cómo usarlo.",
       },
       {
         title: "Los 8 desperdicios (Muda) en contextos de servicio",
