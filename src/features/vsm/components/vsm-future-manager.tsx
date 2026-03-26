@@ -65,6 +65,7 @@ interface VSMFutureManagerProps {
   futureExists: boolean;
   initiatives?: InitiativeOption[];
   scenarios?: ScenarioData[];
+  scamperContext?: string;
 }
 
 export function VSMFutureManager({
@@ -74,6 +75,7 @@ export function VSMFutureManager({
   futureExists,
   initiatives = [],
   scenarios = [],
+  scamperContext,
 }: VSMFutureManagerProps) {
   const router = useRouter();
   const [cloning, setCloning] = useState(false);
@@ -223,12 +225,7 @@ export function VSMFutureManager({
       </TabsContent>
 
       <TabsContent value="scamper">
-        <ScamperPanel contextBuilder={() => {
-          const stepsText = currentSteps.map((s, i) =>
-            `${i + 1}. ${s.stepName} (${s.department ?? "?"}) — Proceso: ${Number(s.processTimeMinutes) || 0}min, Espera: ${Number(s.waitTimeHours) || 0}h, Retrabajo: ${Number(s.reworkPercentage) || 0}%, Valor: ${s.addsValue ? "Sí" : "No"}`
-          ).join("\n");
-          return `PASOS DEL VSM:\n${stepsText}`;
-        }} />
+        <ScamperPanel contextBuilder={() => scamperContext ?? ""} />
       </TabsContent>
     </Tabs>
   );
