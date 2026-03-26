@@ -32,6 +32,7 @@ interface StepRow {
   system: string;
   addsValue: boolean;
   observations: string;
+  justification: string;
 }
 
 interface DBProcessStep {
@@ -47,6 +48,9 @@ interface DBProcessStep {
   wip: number | null;
   addsValue: boolean | null;
   observations: string | null;
+  justification: string | null;
+  vsmState: "current" | "future";
+  sourceStepId: string | null;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string | null;
@@ -64,15 +68,18 @@ function dbToRow(step: DBProcessStep): StepRow {
     system: step.systemUsed ?? "",
     addsValue: step.addsValue ?? false,
     observations: step.observations ?? "",
+    justification: step.justification ?? "",
   };
 }
 
 interface VSMTableProps {
   caseId: string;
   initialSteps: DBProcessStep[];
+  state?: "current" | "future";
 }
 
-export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
+export function VSMTable({ caseId, initialSteps, state = "current" }: VSMTableProps) {
+  const isFuture = state === "future";
   const [steps, setSteps] = useState<StepRow[]>(
     initialSteps.length > 0 ? initialSteps.map(dbToRow) : [],
   );
@@ -123,6 +130,7 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
         system: "",
         addsValue: false,
         observations: "",
+        justification: "",
       },
     ]);
     markDirty();
@@ -155,8 +163,9 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
         systemUsed: s.system,
         addsValue: s.addsValue,
         observations: s.observations,
+        justification: s.justification || undefined,
       }));
-      const result = await saveAllProcessSteps(caseId, dbSteps);
+      const result = await saveAllProcessSteps(caseId, dbSteps, state);
       if (result.error) {
         setSaveError(result.error);
         toast.error(result.error);
@@ -218,6 +227,11 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
                   <TableHead className="min-w-[160px]">
                     Observaciones
                   </TableHead>
+                  {isFuture && (
+                    <TableHead className="min-w-[200px]">
+                      Justificación del cambio
+                    </TableHead>
+                  )}
                   <TableHead className="w-[70px]">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -319,6 +333,18 @@ export function VSMTable({ caseId, initialSteps }: VSMTableProps) {
                         className="h-7 text-xs"
                       />
                     </TableCell>
+                    {isFuture && (
+                      <TableCell>
+                        <Input
+                          value={step.justification}
+                          onChange={(e) =>
+                            updateStep(step.id, "justification", e.target.value)
+                          }
+                          placeholder="¿Por qué este cambio?"
+                          className="h-7 text-xs"
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Button
                         variant="ghost"
