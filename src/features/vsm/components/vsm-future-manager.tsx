@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VSMTable } from "./vsm-table";
 import { VSMComparisonView } from "./vsm-comparison";
 import { ScenarioManager } from "./scenario-manager";
-import { calculateVSM, compareVSM, diffSteps, generateImprovementNarrative, type ProcessStep } from "@/lib/calculations/vsm";
+import { calculateVSM, compareVSM, diffSteps, generateImprovementNarrative, checkPlausibility, type ProcessStep } from "@/lib/calculations/vsm";
 import { cloneCurrentToFuture, deleteFutureVSM } from "@/server/actions/vsm";
 import { GitBranch, Copy, Trash2, BarChart3, Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -78,8 +78,8 @@ export function VSMFutureManager({
   const [cloning, setCloning] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const { comparison, narrative, diffs } = useMemo(() => {
-    if (!futureExists || futureSteps.length === 0) return { comparison: null, narrative: null, diffs: [] };
+  const { comparison, narrative, diffs, warnings } = useMemo(() => {
+    if (!futureExists || futureSteps.length === 0) return { comparison: null, narrative: null, diffs: [], warnings: [] };
     const current = calculateVSM(toCalcSteps(currentSteps));
     const future = calculateVSM(toCalcSteps(futureSteps));
     const comp = compareVSM(current, future);
@@ -108,7 +108,9 @@ export function VSMFutureManager({
     const diffs = diffSteps(currentRaw, futureRaw);
     const narr = generateImprovementNarrative(comp, diffs);
 
-    return { comparison: comp, narrative: narr, diffs };
+    const warns = checkPlausibility(diffs, comp);
+
+    return { comparison: comp, narrative: narr, diffs, warnings: warns };
   }, [currentSteps, futureSteps, futureExists]);
 
   async function handleClone() {
@@ -195,7 +197,7 @@ export function VSMFutureManager({
 
           <TabsContent value="compare">
             {comparison && narrative ? (
-              <VSMComparisonView comparison={comparison} narrative={narrative} futureSteps={justifiedSteps} initiatives={initiatives} stepDiffs={diffs} />
+              <VSMComparisonView comparison={comparison} narrative={narrative} futureSteps={justifiedSteps} initiatives={initiatives} stepDiffs={diffs} warnings={warnings} />
             ) : (
               <p className="py-8 text-center text-muted-foreground">
                 Guarda cambios en el VSM futuro para ver la comparación.

@@ -11,8 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap, FileText, MessageSquareQuote, Link2 } from "lucide-react";
-import { type VSMComparison, type ImprovementNarrative, type StepDiff } from "@/lib/calculations/vsm";
+import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap, FileText, MessageSquareQuote, Link2, AlertTriangle, Info } from "lucide-react";
+import { type VSMComparison, type ImprovementNarrative, type StepDiff, type PlausibilityWarning } from "@/lib/calculations/vsm";
 
 function fmt(n: number) {
   return n.toFixed(2);
@@ -48,6 +48,7 @@ interface VSMComparisonViewProps {
   futureSteps: { name: string; justification: string }[];
   initiatives?: InitiativeOption[];
   stepDiffs?: StepDiff[];
+  warnings?: PlausibilityWarning[];
 }
 
 function groupByInitiative(diffs: StepDiff[], initiatives: InitiativeOption[]) {
@@ -70,7 +71,7 @@ function groupByInitiative(diffs: StepDiff[], initiatives: InitiativeOption[]) {
   );
 }
 
-export function VSMComparisonView({ comparison, narrative, futureSteps, initiatives = [], stepDiffs = [] }: VSMComparisonViewProps) {
+export function VSMComparisonView({ comparison, narrative, futureSteps, initiatives = [], stepDiffs = [], warnings = [] }: VSMComparisonViewProps) {
   const { metrics, summary } = comparison;
 
   return (
@@ -121,6 +122,36 @@ export function VSMComparisonView({ comparison, narrative, futureSteps, initiati
           </CardContent>
         </Card>
       </div>
+
+      {/* Plausibility warnings */}
+      {warnings.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base font-bold text-amber-700">
+              <AlertTriangle className="size-4" />
+              Verificación de supuestos ({warnings.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {warnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-2.5 rounded-md border border-amber-500/20 bg-white p-3 text-sm">
+                {w.level === "warning" ? (
+                  <AlertTriangle className="size-4 shrink-0 mt-0.5 text-amber-600" />
+                ) : (
+                  <Info className="size-4 shrink-0 mt-0.5 text-amber-500" />
+                )}
+                <div>
+                  <span className="font-semibold text-amber-800">{w.step}</span>
+                  <span className="text-amber-700"> — {w.message}</span>
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-amber-600/70 pt-1">
+              Estas alertas no son bloqueantes — sirven para revisar supuestos antes de presentar.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Metrics table */}
       <Card>

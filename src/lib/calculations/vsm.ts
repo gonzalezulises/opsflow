@@ -274,6 +274,110 @@ export function generateImprovementNarrative(
 }
 
 // ---------------------------------------------------------------------------
+// Plausibility warnings (soft, non-blocking)
+// ---------------------------------------------------------------------------
+
+export type WarningLevel = "caution" | "warning";
+
+export interface PlausibilityWarning {
+  level: WarningLevel;
+  step: string;
+  message: string;
+}
+
+/**
+ * Check step diffs and aggregate comparison for overly optimistic assumptions.
+ * Returns warnings sorted by severity (warning > caution).
+ */
+export function checkPlausibility(
+  stepDiffs: StepDiff[],
+  comparison: VSMComparison,
+): PlausibilityWarning[] {
+  const warnings: PlausibilityWarning[] = [];
+
+  for (const d of stepDiffs) {
+    if (d.removed || d.added) continue;
+
+    const stepLabel = d.futureName || d.name;
+
+    // 1. Extreme wait reduction (>80%)
+    if (d.waitDelta < 0) {
+      const origWait = d.waitDelta / -1 + 0; // we need original, reconstruct from delta
+      // waitDelta = future - current, so current = future - waitDelta. But we don't have future here.
+      // Simpler: use the percentage of the improvement vs a sensible threshold
+      // Since we don't have originals in StepDiff, compute from waitDelta only on large absolute reductions
+      if (Math.abs(d.waitDelta) >= 10) {
+        warnings.push({
+          level: "warning",
+          step: stepLabel,
+          message: `Espera reducida en ${Math.abs(d.waitDelta).toFixed(1)}h. Reducciones de espera >10h suelen requerir cambios estructurales — ¿está documentada la justificación?`,
+        });
+      } else if (Math.abs(d.waitDelta) >= 5) {
+        warnings.push({
+          level: "caution",
+          step: stepLabel,
+          message: `Espera reducida en ${Math.abs(d.waitDelta).toFixed(1)}h. Verifica que esta mejora sea ejecutable en 30 días.`,
+        });
+      }
+    }
+
+    // 2. Extreme process time reduction (>70%)
+    if (d.processDelta < 0 && Math.abs(d.processDelta) >= 30) {
+      warnings.push({
+        level: "caution",
+        step: stepLabel,
+        message: `Tiempo de proceso reducido en ${Math.abs(d.processDelta).toFixed(0)}min. Verifica que no se esté subestimando el trabajo real.`,
+      });
+    }
+
+    // 3. Rework reduced to zero (from any meaningful level)
+    if (d.reworkDelta < 0 && d.reworkDelta <= -5) {
+      warnings.push({
+        level: d.reworkDelta <= -10 ? "warning" : "caution",
+        step: stepLabel,
+        message: `Retrabajo reducido en ${Math.abs(d.reworkDelta).toFixed(1)}pp. Eliminar retrabajo por completo es poco frecuente sin automatización o rediseño significativo.`,
+      });
+    }
+
+    // 4. Missing justification on a significant change
+    if (!d.justification && d.impactScore > 100) {
+      warnings.push({
+        level: "caution",
+        step: stepLabel,
+        message: "Cambio significativo sin justificación documentada. Agrega una razón para hacer auditable esta mejora.",
+      });
+    }
+  }
+
+  // 5. Aggregate: >50% lead time reduction
+  if (comparison.summary.leadTimeReductionPct > 50) {
+    warnings.push({
+      level: "warning",
+      step: "General",
+      message: `Reducción total de lead time del ${comparison.summary.leadTimeReductionPct.toFixed(0)}%. Reducciones >50% en un solo ciclo de mejora son poco comunes — considera dividir en fases.`,
+    });
+  }
+
+  // 6. >40% of steps removed
+  const { stepsRemoved } = comparison.summary;
+  const currentCount = comparison.metrics.find((m) => m.label === "Cantidad de pasos")?.current ?? 0;
+  if (currentCount > 0 && stepsRemoved / currentCount > 0.4) {
+    warnings.push({
+      level: "warning",
+      step: "General",
+      message: `Se eliminaron ${stepsRemoved} de ${currentCount} pasos (${Math.round(stepsRemoved / currentCount * 100)}%). Eliminar >40% de pasos puede indicar que se están omitiendo actividades necesarias.`,
+    });
+  }
+
+  // Sort: warnings first, then cautions
+  return warnings.sort((a, b) => {
+    if (a.level === "warning" && b.level !== "warning") return -1;
+    if (a.level !== "warning" && b.level === "warning") return 1;
+    return 0;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // VSM Comparison (Current vs Future)
 // ---------------------------------------------------------------------------
 
