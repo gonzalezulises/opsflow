@@ -23,6 +23,7 @@ import {
 import { saveAllInitiatives } from "@/server/actions/prioritization";
 import { generateFromAI } from "@/server/actions/ai";
 import { AIPanel } from "@/components/shared/ai-panel";
+import { ScamperIdeasPanel } from "./scamper-ideas-panel";
 import { SaveBar } from "@/components/shared/save-bar";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { toast } from "sonner";
@@ -76,12 +77,14 @@ interface PrioritizationMatrixProps {
   caseId: string;
   initialInitiatives: InitiativeFromDB[];
   initialWeights?: PrioritizationWeights;
+  scamperContext?: string;
 }
 
 export function PrioritizationMatrix({
   caseId,
   initialInitiatives,
   initialWeights,
+  scamperContext,
 }: PrioritizationMatrixProps) {
   const [initiatives, setInitiatives] = useState<InitiativeRow[]>(
     initialInitiatives.map(dbToRow),
@@ -107,6 +110,24 @@ export function PrioritizationMatrix({
         id: crypto.randomUUID(),
         name: "",
         description: "",
+        impactLeadTime: 3,
+        impactEconomic: 3,
+        impactResilience: 3,
+        feasibility30d: 3,
+        effort: 3,
+        externalDependency: 3,
+      },
+    ]);
+    markDirty();
+  }
+
+  function addFromScamper(name: string, description: string) {
+    setInitiatives((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        name,
+        description,
         impactLeadTime: 3,
         impactEconomic: 3,
         impactResilience: 3,
@@ -311,6 +332,13 @@ export function PrioritizationMatrix({
           </CardContent>
         </Card>
       </div>
+
+      {scamperContext && (
+        <ScamperIdeasPanel
+          scamperContext={scamperContext}
+          onConvertToInitiative={addFromScamper}
+        />
+      )}
 
       <div className="overflow-x-auto rounded-lg border">
         <Table>

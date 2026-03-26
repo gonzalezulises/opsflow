@@ -6,10 +6,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VSMTable } from "./vsm-table";
 import { VSMComparisonView } from "./vsm-comparison";
 import { ScenarioManager } from "./scenario-manager";
-import { ScamperPanel } from "./scamper-panel";
 import { calculateVSM, compareVSM, diffSteps, generateImprovementNarrative, checkPlausibility, type ProcessStep } from "@/lib/calculations/vsm";
 import { cloneCurrentToFuture, deleteFutureVSM } from "@/server/actions/vsm";
-import { GitBranch, Copy, Trash2, BarChart3, Layers, Lightbulb, Loader2 } from "lucide-react";
+import { GitBranch, Copy, Trash2, BarChart3, Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -65,7 +64,6 @@ interface VSMFutureManagerProps {
   futureExists: boolean;
   initiatives?: InitiativeOption[];
   scenarios?: ScenarioData[];
-  scamperContext?: string;
 }
 
 export function VSMFutureManager({
@@ -75,7 +73,6 @@ export function VSMFutureManager({
   futureExists,
   initiatives = [],
   scenarios = [],
-  scamperContext,
 }: VSMFutureManagerProps) {
   const router = useRouter();
   const [cloning, setCloning] = useState(false);
@@ -170,10 +167,6 @@ export function VSMFutureManager({
             <Layers className="size-4" />
             Escenarios{scenarios.length > 0 ? ` (${scenarios.length})` : ""}
           </TabsTrigger>
-          <TabsTrigger value="scamper" className="gap-1.5">
-            <Lightbulb className="size-4" />
-            Ideas SCAMPER
-          </TabsTrigger>
         </TabsList>
 
         <div className="flex gap-2 shrink-0">
@@ -224,9 +217,6 @@ export function VSMFutureManager({
         />
       </TabsContent>
 
-      <TabsContent value="scamper">
-        <ScamperPanel contextBuilder={() => scamperContext ?? ""} />
-      </TabsContent>
     </Tabs>
   );
 }
