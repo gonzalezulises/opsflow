@@ -2,9 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { eq, asc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db } from "@/server/db";
 import { processSteps } from "@/server/db/schema";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type VsmState = "current" | "future";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -23,21 +29,46 @@ const processStepSchema = z.object({
   wip: z.number().int().optional(),
   addsValue: z.boolean().optional(),
   observations: z.string().optional(),
+  justification: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 
-export async function getProcessSteps(caseId: string) {
+export async function getProcessSteps(caseId: string, state: VsmState = "current") {
   try {
     const rows = await db
       .select()
       .from(processSteps)
-      .where(eq(processSteps.caseId, caseId))
+      .where(
+        and(
+          eq(processSteps.caseId, caseId),
+          eq(processSteps.vsmState, state),
+        ),
+      )
       .orderBy(asc(processSteps.orderIndex));
 
     return { data: rows };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function hasFutureVSM(caseId: string) {
+  try {
+    const rows = await db
+      .select({ id: processSteps.id })
+      .from(processSteps)
+      .where(
+        and(
+          eq(processSteps.caseId, caseId),
+          eq(processSteps.vsmState, "future"),
+        ),
+      )
+      .limit(1);
+
+    return { data: rows.length > 0 };
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -80,17 +111,22 @@ export async function saveProcessStep(
 export async function saveAllProcessSteps(
   caseId: string,
   steps: z.input<typeof processStepSchema>[],
+  state: VsmState = "current",
 ) {
   try {
     const result = await db.transaction(async (tx) => {
-      // Delete existing steps for this case
+      // Delete existing steps for this case AND state only
       await tx
         .delete(processSteps)
-        .where(eq(processSteps.caseId, caseId));
+        .where(
+          and(
+            eq(processSteps.caseId, caseId),
+            eq(processSteps.vsmState, state),
+          ),
+        );
 
       if (steps.length === 0) return [];
 
-      // Validate and insert all new steps
       const validatedSteps = steps.map((step, index) => {
         const parsed = processStepSchema.safeParse({
           ...step,
@@ -99,7 +135,7 @@ export async function saveAllProcessSteps(
         });
         if (!parsed.success) throw new Error(parsed.error.issues[0].message);
         const { id: _id, ...values } = parsed.data;
-        return values;
+        return { ...values, vsmState: state as "current" | "future" };
       });
 
       const rows = await tx
@@ -110,8 +146,95 @@ export async function saveAllProcessSteps(
       return rows;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: result };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+/**
+ * Clone the current VSM to create a future state.
+ * Each future step links to its source via sourceStepId.
+ * Returns the new future steps.
+ */
+export async function cloneCurrentToFuture(caseId: string) {
+  try {
+    // Check if future already exists
+    const existing = await db
+      .select({ id: processSteps.id })
+      .from(processSteps)
+      .where(
+        and(
+          eq(processSteps.caseId, caseId),
+          eq(processSteps.vsmState, "future"),
+        ),
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      return { error: "Ya existe un VSM futuro para este caso. Elimínalo primero si quieres recrearlo." };
+    }
+
+    const currentSteps = await db
+      .select()
+      .from(processSteps)
+      .where(
+        and(
+          eq(processSteps.caseId, caseId),
+          eq(processSteps.vsmState, "current"),
+        ),
+      )
+      .orderBy(asc(processSteps.orderIndex));
+
+    if (currentSteps.length === 0) {
+      return { error: "No hay pasos en el VSM actual. Completa el VSM actual primero." };
+    }
+
+    const futureSteps = await db
+      .insert(processSteps)
+      .values(
+        currentSteps.map((s) => ({
+          caseId,
+          orderIndex: s.orderIndex,
+          stepName: s.stepName,
+          department: s.department,
+          processTimeMinutes: s.processTimeMinutes,
+          waitTimeHours: s.waitTimeHours,
+          reworkPercentage: s.reworkPercentage,
+          systemUsed: s.systemUsed,
+          wip: s.wip,
+          addsValue: s.addsValue,
+          observations: s.observations,
+          vsmState: "future" as const,
+          sourceStepId: s.id,
+        })),
+      )
+      .returning();
+
+    revalidatePath(`/dashboard/cases/${caseId}`);
+    return { data: futureSteps };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+/**
+ * Delete the entire future VSM for a case.
+ */
+export async function deleteFutureVSM(caseId: string) {
+  try {
+    await db
+      .delete(processSteps)
+      .where(
+        and(
+          eq(processSteps.caseId, caseId),
+          eq(processSteps.vsmState, "future"),
+        ),
+      );
+
+    revalidatePath(`/dashboard/cases/${caseId}`);
+    return { data: { success: true } };
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -126,7 +249,7 @@ export async function deleteProcessStep(id: string) {
 
     if (!row) return { error: "Paso no encontrado" };
 
-    revalidatePath(`/cases/${row.caseId}`);
+    revalidatePath(`/dashboard/cases/${row.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -147,7 +270,7 @@ export async function reorderProcessSteps(
       }
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: { success: true } };
   } catch (e) {
     return { error: (e as Error).message };
