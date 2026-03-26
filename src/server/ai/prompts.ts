@@ -86,6 +86,24 @@ ${context}
 Incluye: resumen ejecutivo, hallazgos clave por área, top recomendaciones con prioridad y timeline, y perspectiva a 30-60 días.`;
 }
 
+// ─── Improvement narrative refinement ───
+
+export function improvementNarrativePrompt(context: string): string {
+  return `Refina la narrativa de mejora de un caso de optimización operativa.
+
+DATOS ESTRUCTURADOS (generados por el sistema, NO inventados):
+${context}
+
+INSTRUCCIONES:
+- El executiveSummary debe ser presentable ante un comité gerencial: 3-4 oraciones, tono profesional, basado SOLO en los datos proporcionados.
+- Los keyInsights deben agregar valor analítico: conexiones entre métricas, implicaciones de negocio, o perspectivas que no son obvias al leer los números solos.
+- Las inconsistencies deben señalar si alguna mejora parece contradictoria, excesiva o no justificada.
+- Los scenarioRisks deben identificar qué podría fallar al ejecutar esta propuesta: dependencias, capacidad organizacional, riesgos de implementación.
+- La strengthenedNarrative es una versión pulida del resumen — mantén los números exactos, mejora la redacción y la estructura argumentativa.
+- NO inventes cifras. Toda métrica debe venir de los datos proporcionados.
+- Si detectas datos inconsistentes, señálalo en inconsistencies.`;
+}
+
 // ─── Generation prompts (cross-module) ───
 
 export function riskGenerationPrompt(context: string): string {

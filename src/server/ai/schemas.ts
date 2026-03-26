@@ -144,6 +144,22 @@ export const actionPlanGenerationSchema = z.object({
   })).describe("Acciones generadas para el plan de 30 días"),
 });
 
+// ─── Improvement narrative refinement ───
+
+export const improvementNarrativeSchema = z.object({
+  executiveSummary: z.string().describe("Resumen ejecutivo de la mejora en 3-4 oraciones para presentar a la gerencia"),
+  keyInsights: z.array(z.string()).describe("3-5 insights que no son evidentes solo con los números"),
+  inconsistencies: z.array(z.object({
+    issue: z.string().describe("Qué es inconsistente"),
+    recommendation: z.string().describe("Qué debería revisarse"),
+  })).describe("Inconsistencias lógicas detectadas en la propuesta de mejora"),
+  scenarioRisks: z.array(z.object({
+    risk: z.string().describe("Riesgo del escenario propuesto"),
+    mitigation: z.string().describe("Cómo mitigarlo"),
+  })).describe("Riesgos de ejecutar este escenario de mejora"),
+  strengthenedNarrative: z.string().describe("Versión mejorada de la narrativa de mejora — máximo 150 palabras, tono ejecutivo, basada solo en datos proporcionados"),
+});
+
 export type DiagnosticSummary = z.infer<typeof diagnosticSummarySchema>;
 export type VSMAnalysis = z.infer<typeof vsmAnalysisSchema>;
 export type RiskRecommendations = z.infer<typeof riskRecommendationsSchema>;
@@ -155,3 +171,4 @@ export type ExecutiveReport = z.infer<typeof executiveReportSchema>;
 export type RiskGeneration = z.infer<typeof riskGenerationSchema>;
 export type InitiativeGeneration = z.infer<typeof initiativeGenerationSchema>;
 export type ActionPlanGeneration = z.infer<typeof actionPlanGenerationSchema>;
+export type ImprovementNarrativeAI = z.infer<typeof improvementNarrativeSchema>;

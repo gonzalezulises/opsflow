@@ -10,9 +10,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap, FileText, MessageSquareQuote, Link2, AlertTriangle, Info } from "lucide-react";
+import { useState } from "react";
+import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap, FileText, MessageSquareQuote, Link2, AlertTriangle, Info, Sparkles, Loader2 } from "lucide-react";
 import { type VSMComparison, type ImprovementNarrative, type StepDiff, type PlausibilityWarning } from "@/lib/calculations/vsm";
+import { getAIInsight } from "@/server/actions/ai";
+import type { ImprovementNarrativeAI } from "@/server/ai/schemas";
+import { toast } from "sonner";
 
 function fmt(n: number) {
   return n.toFixed(2);
@@ -73,6 +78,27 @@ function groupByInitiative(diffs: StepDiff[], initiatives: InitiativeOption[]) {
 
 export function VSMComparisonView({ comparison, narrative, futureSteps, initiatives = [], stepDiffs = [], warnings = [] }: VSMComparisonViewProps) {
   const { metrics, summary } = comparison;
+  const [aiResult, setAiResult] = useState<ImprovementNarrativeAI | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  async function handleRefineWithAI() {
+    setAiLoading(true);
+    const context = [
+      `NARRATIVA ACTUAL: ${narrative.headline}`,
+      `BULLETS: ${narrative.bullets.join(" | ")}`,
+      `MÉTRICAS: ${metrics.map((m) => `${m.label}: ${fmt(m.current)} → ${fmt(m.future)} ${m.unit} (${m.deltaPct > 0 ? "+" : ""}${fmt(m.deltaPct)}%)`).join(", ")}`,
+      `TOP CAMBIOS: ${narrative.topChanges.map((c) => `${c.step}: ${c.description}${c.justification ? ` — "${c.justification}"` : ""}`).join(" | ")}`,
+      `WARNINGS: ${warnings.map((w) => `[${w.step}] ${w.message}`).join(" | ") || "Ninguno"}`,
+    ].join("\n");
+
+    const { data, error } = await getAIInsight("improvement_narrative", context);
+    setAiLoading(false);
+    if (error) {
+      toast.error(error);
+    } else {
+      setAiResult(data as ImprovementNarrativeAI);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -206,6 +232,69 @@ export function VSMComparisonView({ comparison, narrative, futureSteps, initiati
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* AI refinement */}
+          {!aiResult && (
+            <Button variant="outline" size="sm" onClick={handleRefineWithAI} disabled={aiLoading} className="print:hidden">
+              {aiLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
+              {aiLoading ? "Analizando..." : "Refinar narrativa con IA"}
+            </Button>
+          )}
+
+          {aiResult && (
+            <div className="space-y-4 rounded-lg border border-primary/20 bg-white p-4 mt-2">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+                <Sparkles className="size-3.5" />
+                Análisis IA
+              </div>
+
+              <div>
+                <p className="text-sm font-medium leading-relaxed">{aiResult.strengthenedNarrative}</p>
+              </div>
+
+              {aiResult.keyInsights.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-primary mb-1">Insights clave</p>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    {aiResult.keyInsights.map((insight, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="shrink-0 text-primary">•</span>
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {aiResult.inconsistencies.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-amber-600 mb-1">Inconsistencias detectadas</p>
+                  {aiResult.inconsistencies.map((inc, i) => (
+                    <div key={i} className="text-sm mb-1">
+                      <span className="text-amber-700 font-medium">{inc.issue}</span>
+                      <span className="text-muted-foreground"> — {inc.recommendation}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {aiResult.scenarioRisks.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-destructive mb-1">Riesgos del escenario</p>
+                  {aiResult.scenarioRisks.map((r, i) => (
+                    <div key={i} className="text-sm mb-1">
+                      <span className="text-destructive font-medium">{r.risk}</span>
+                      <span className="text-muted-foreground"> — Mitigación: {r.mitigation}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground/60 italic">
+                Generado por IA como apoyo analítico. Las métricas provienen del cálculo determinístico del sistema.
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
