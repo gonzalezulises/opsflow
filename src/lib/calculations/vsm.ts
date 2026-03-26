@@ -109,6 +109,7 @@ export interface StepDiff {
   processDelta: number;
   reworkDelta: number;
   justification: string;
+  linkedInitiativeIds: string[];
   impactScore: number; // abs sum of time deltas — higher = more impactful
 }
 
@@ -120,6 +121,7 @@ interface RawStep {
   reworkPercentage: number;
   sourceStepId: string | null;
   justification: string;
+  linkedInitiativeIds: string[];
 }
 
 export function diffSteps(currentRaw: RawStep[], futureRaw: RawStep[]): StepDiff[] {
@@ -140,6 +142,7 @@ export function diffSteps(currentRaw: RawStep[], futureRaw: RawStep[]): StepDiff
         processDelta: 0,
         reworkDelta: 0,
         justification: f.justification,
+        linkedInitiativeIds: f.linkedInitiativeIds,
         impactScore: f.waitTimeHours * 60 + f.processTimeMinutes,
       });
       continue;
@@ -164,6 +167,7 @@ export function diffSteps(currentRaw: RawStep[], futureRaw: RawStep[]): StepDiff
       processDelta,
       reworkDelta,
       justification: f.justification,
+      linkedInitiativeIds: f.linkedInitiativeIds,
       impactScore: Math.abs(waitDelta * 60) + Math.abs(processDelta) + Math.abs(reworkDelta * 10),
     });
   }
@@ -181,6 +185,7 @@ export function diffSteps(currentRaw: RawStep[], futureRaw: RawStep[]): StepDiff
         processDelta: -c.processTimeMinutes,
         reworkDelta: -c.reworkPercentage,
         justification: "",
+        linkedInitiativeIds: [],
         impactScore: c.waitTimeHours * 60 + c.processTimeMinutes,
       });
     }

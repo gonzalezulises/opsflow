@@ -32,7 +32,17 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ status: "ok", message: "Migration applied" });
+    // Migration 0002: linked_initiative_ids
+    const initColCheck = await db.execute(
+      sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'process_steps' AND column_name = 'linked_initiative_ids'`
+    );
+    if ((initColCheck as unknown as unknown[]).length === 0) {
+      await db.execute(
+        sql`ALTER TABLE "process_steps" ADD COLUMN "linked_initiative_ids" jsonb`
+      );
+    }
+
+    return NextResponse.json({ status: "ok", message: "All migrations applied" });
   } catch (error) {
     return NextResponse.json(
       { status: "error", message: (error as Error).message },

@@ -30,6 +30,7 @@ const processStepSchema = z.object({
   addsValue: z.boolean().optional(),
   observations: z.string().optional(),
   justification: z.string().optional(),
+  linkedInitiativeIds: z.array(z.string().uuid()).optional(),
 });
 
 // ---------------------------------------------------------------------------

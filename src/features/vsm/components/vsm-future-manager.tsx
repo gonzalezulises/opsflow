@@ -25,6 +25,7 @@ interface DBProcessStep {
   addsValue: boolean | null;
   observations: string | null;
   justification: string | null;
+  linkedInitiativeIds: string[] | null;
   vsmState: "current" | "future";
   sourceStepId: string | null;
   createdAt: Date;
@@ -42,11 +43,18 @@ function toCalcSteps(steps: DBProcessStep[]): ProcessStep[] {
   }));
 }
 
+export interface InitiativeOption {
+  id: string;
+  name: string;
+  classification: string | null;
+}
+
 interface VSMFutureManagerProps {
   caseId: string;
   currentSteps: DBProcessStep[];
   futureSteps: DBProcessStep[];
   futureExists: boolean;
+  initiatives?: InitiativeOption[];
 }
 
 export function VSMFutureManager({
@@ -54,13 +62,14 @@ export function VSMFutureManager({
   currentSteps,
   futureSteps,
   futureExists,
+  initiatives = [],
 }: VSMFutureManagerProps) {
   const router = useRouter();
   const [cloning, setCloning] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const { comparison, narrative } = useMemo(() => {
-    if (!futureExists || futureSteps.length === 0) return { comparison: null, narrative: null };
+  const { comparison, narrative, diffs } = useMemo(() => {
+    if (!futureExists || futureSteps.length === 0) return { comparison: null, narrative: null, diffs: [] };
     const current = calculateVSM(toCalcSteps(currentSteps));
     const future = calculateVSM(toCalcSteps(futureSteps));
     const comp = compareVSM(current, future);
@@ -73,6 +82,7 @@ export function VSMFutureManager({
       reworkPercentage: Number(s.reworkPercentage) || 0,
       sourceStepId: s.sourceStepId,
       justification: s.justification ?? "",
+      linkedInitiativeIds: s.linkedInitiativeIds ?? [],
     }));
     const futureRaw = futureSteps.map((s) => ({
       id: s.id,
@@ -82,12 +92,13 @@ export function VSMFutureManager({
       reworkPercentage: Number(s.reworkPercentage) || 0,
       sourceStepId: s.sourceStepId,
       justification: s.justification ?? "",
+      linkedInitiativeIds: s.linkedInitiativeIds ?? [],
     }));
 
     const diffs = diffSteps(currentRaw, futureRaw);
     const narr = generateImprovementNarrative(comp, diffs);
 
-    return { comparison: comp, narrative: narr };
+    return { comparison: comp, narrative: narr, diffs };
   }, [currentSteps, futureSteps, futureExists]);
 
   async function handleClone() {
@@ -165,12 +176,12 @@ export function VSMFutureManager({
       {futureExists && (
         <>
           <TabsContent value="future">
-            <VSMTable caseId={caseId} initialSteps={futureSteps} state="future" />
+            <VSMTable caseId={caseId} initialSteps={futureSteps} state="future" initiatives={initiatives} />
           </TabsContent>
 
           <TabsContent value="compare">
             {comparison && narrative ? (
-              <VSMComparisonView comparison={comparison} narrative={narrative} futureSteps={justifiedSteps} />
+              <VSMComparisonView comparison={comparison} narrative={narrative} futureSteps={justifiedSteps} initiatives={initiatives} stepDiffs={diffs} />
             ) : (
               <p className="py-8 text-center text-muted-foreground">
                 Guarda cambios en el VSM futuro para ver la comparación.

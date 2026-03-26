@@ -1,0 +1,1 @@
+ALTER TABLE "process_steps" ADD COLUMN "linked_initiative_ids" jsonb;

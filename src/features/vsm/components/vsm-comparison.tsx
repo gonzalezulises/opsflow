@@ -11,8 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap, FileText, MessageSquareQuote } from "lucide-react";
-import { type VSMComparison, type ImprovementNarrative } from "@/lib/calculations/vsm";
+import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap, FileText, MessageSquareQuote, Link2 } from "lucide-react";
+import { type VSMComparison, type ImprovementNarrative, type StepDiff } from "@/lib/calculations/vsm";
 
 function fmt(n: number) {
   return n.toFixed(2);
@@ -36,13 +36,41 @@ function DeltaBadge({ delta, deltaPct, improved }: { delta: number; deltaPct: nu
   );
 }
 
+interface InitiativeOption {
+  id: string;
+  name: string;
+  classification: string | null;
+}
+
 interface VSMComparisonViewProps {
   comparison: VSMComparison;
   narrative: ImprovementNarrative;
   futureSteps: { name: string; justification: string }[];
+  initiatives?: InitiativeOption[];
+  stepDiffs?: StepDiff[];
 }
 
-export function VSMComparisonView({ comparison, narrative, futureSteps }: VSMComparisonViewProps) {
+function groupByInitiative(diffs: StepDiff[], initiatives: InitiativeOption[]) {
+  const map = new Map<string, { initiative: InitiativeOption; steps: StepDiff[]; totalWaitDelta: number; totalProcessDelta: number }>();
+  for (const d of diffs) {
+    for (const iid of d.linkedInitiativeIds) {
+      if (!map.has(iid)) {
+        const init = initiatives.find((i) => i.id === iid);
+        if (!init) continue;
+        map.set(iid, { initiative: init, steps: [], totalWaitDelta: 0, totalProcessDelta: 0 });
+      }
+      const entry = map.get(iid)!;
+      entry.steps.push(d);
+      entry.totalWaitDelta += d.waitDelta;
+      entry.totalProcessDelta += d.processDelta;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    Math.abs(b.totalWaitDelta * 60 + b.totalProcessDelta) - Math.abs(a.totalWaitDelta * 60 + a.totalProcessDelta)
+  );
+}
+
+export function VSMComparisonView({ comparison, narrative, futureSteps, initiatives = [], stepDiffs = [] }: VSMComparisonViewProps) {
   const { metrics, summary } = comparison;
 
   return (
@@ -179,6 +207,52 @@ export function VSMComparisonView({ comparison, narrative, futureSteps }: VSMCom
           </CardContent>
         </Card>
       )}
+
+      {/* Impact by initiative */}
+      {initiatives.length > 0 && stepDiffs.length > 0 && (() => {
+        const grouped = groupByInitiative(stepDiffs, initiatives);
+        if (grouped.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base font-bold">
+                <Link2 className="size-4" />
+                Impacto por iniciativa
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {grouped.map((g) => (
+                <div key={g.initiative.id} className="rounded-lg border p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={g.initiative.classification === "Atacar ya" ? "default" : "secondary"}>
+                      {g.initiative.classification ?? "Sin clasificar"}
+                    </Badge>
+                    <span className="font-semibold">{g.initiative.name}</span>
+                  </div>
+                  <div className="flex gap-4 text-sm text-muted-foreground">
+                    {g.totalWaitDelta !== 0 && (
+                      <span className={g.totalWaitDelta < 0 ? "text-emerald-600" : "text-destructive"}>
+                        Espera: {g.totalWaitDelta > 0 ? "+" : ""}{fmt(g.totalWaitDelta)}h
+                      </span>
+                    )}
+                    {g.totalProcessDelta !== 0 && (
+                      <span className={g.totalProcessDelta < 0 ? "text-emerald-600" : "text-destructive"}>
+                        Proceso: {g.totalProcessDelta > 0 ? "+" : ""}{fmt(g.totalProcessDelta)}min
+                      </span>
+                    )}
+                    <span>{g.steps.length} paso(s) afectado(s)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {g.steps.map((s, i) => (
+                      <Badge key={i} variant="outline" className="text-xs">{s.removed ? `${s.name} ✕` : s.futureName || s.name}</Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* All justifications */}
       {futureSteps.some((s) => s.justification) && (

@@ -276,6 +276,7 @@ export const processSteps = pgTable(
     vsmState: vsmStateEnum("vsm_state").notNull().default("current"),
     sourceStepId: uuid("source_step_id"),
     justification: text("justification"),
+    linkedInitiativeIds: jsonb("linked_initiative_ids").$type<string[]>(),
   },
   (t) => [
     index("process_steps_case_id_idx").on(t.caseId),

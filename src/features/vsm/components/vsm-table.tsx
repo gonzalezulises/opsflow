@@ -33,6 +33,7 @@ interface StepRow {
   addsValue: boolean;
   observations: string;
   justification: string;
+  linkedInitiativeIds: string[];
 }
 
 interface DBProcessStep {
@@ -49,6 +50,7 @@ interface DBProcessStep {
   addsValue: boolean | null;
   observations: string | null;
   justification: string | null;
+  linkedInitiativeIds: string[] | null;
   vsmState: "current" | "future";
   sourceStepId: string | null;
   createdAt: Date;
@@ -69,16 +71,24 @@ function dbToRow(step: DBProcessStep): StepRow {
     addsValue: step.addsValue ?? false,
     observations: step.observations ?? "",
     justification: step.justification ?? "",
+    linkedInitiativeIds: step.linkedInitiativeIds ?? [],
   };
+}
+
+export interface InitiativeOption {
+  id: string;
+  name: string;
+  classification: string | null;
 }
 
 interface VSMTableProps {
   caseId: string;
   initialSteps: DBProcessStep[];
   state?: "current" | "future";
+  initiatives?: InitiativeOption[];
 }
 
-export function VSMTable({ caseId, initialSteps, state = "current" }: VSMTableProps) {
+export function VSMTable({ caseId, initialSteps, state = "current", initiatives = [] }: VSMTableProps) {
   const isFuture = state === "future";
   const [steps, setSteps] = useState<StepRow[]>(
     initialSteps.length > 0 ? initialSteps.map(dbToRow) : [],
@@ -131,6 +141,7 @@ export function VSMTable({ caseId, initialSteps, state = "current" }: VSMTablePr
         addsValue: false,
         observations: "",
         justification: "",
+        linkedInitiativeIds: [],
       },
     ]);
     markDirty();
@@ -164,6 +175,7 @@ export function VSMTable({ caseId, initialSteps, state = "current" }: VSMTablePr
         addsValue: s.addsValue,
         observations: s.observations,
         justification: s.justification || undefined,
+        linkedInitiativeIds: s.linkedInitiativeIds.length > 0 ? s.linkedInitiativeIds : undefined,
       }));
       const result = await saveAllProcessSteps(caseId, dbSteps, state);
       if (result.error) {
@@ -230,6 +242,11 @@ export function VSMTable({ caseId, initialSteps, state = "current" }: VSMTablePr
                   {isFuture && (
                     <TableHead className="min-w-[200px]">
                       Justificación del cambio
+                    </TableHead>
+                  )}
+                  {isFuture && initiatives.length > 0 && (
+                    <TableHead className="min-w-[150px]">
+                      Iniciativas
                     </TableHead>
                   )}
                   <TableHead className="w-[70px]">Acciones</TableHead>
@@ -343,6 +360,26 @@ export function VSMTable({ caseId, initialSteps, state = "current" }: VSMTablePr
                           placeholder="¿Por qué este cambio?"
                           className="h-7 text-xs"
                         />
+                      </TableCell>
+                    )}
+                    {isFuture && initiatives.length > 0 && (
+                      <TableCell>
+                        <select
+                          multiple
+                          value={step.linkedInitiativeIds}
+                          onChange={(e) => {
+                            const selected = Array.from(e.target.selectedOptions, (o) => o.value);
+                            setSteps((prev) => prev.map((s) => s.id === step.id ? { ...s, linkedInitiativeIds: selected } : s));
+                            markDirty();
+                          }}
+                          className="h-14 w-full rounded-md border bg-background px-1 text-xs"
+                        >
+                          {initiatives.map((init) => (
+                            <option key={init.id} value={init.id}>
+                              {init.name}
+                            </option>
+                          ))}
+                        </select>
                       </TableCell>
                     )}
                     <TableCell>
