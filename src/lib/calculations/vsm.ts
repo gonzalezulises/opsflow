@@ -300,12 +300,8 @@ export function checkPlausibility(
 
     const stepLabel = d.futureName || d.name;
 
-    // 1. Extreme wait reduction (>80%)
+    // 1. Extreme wait reduction
     if (d.waitDelta < 0) {
-      const origWait = d.waitDelta / -1 + 0; // we need original, reconstruct from delta
-      // waitDelta = future - current, so current = future - waitDelta. But we don't have future here.
-      // Simpler: use the percentage of the improvement vs a sensible threshold
-      // Since we don't have originals in StepDiff, compute from waitDelta only on large absolute reductions
       if (Math.abs(d.waitDelta) >= 10) {
         warnings.push({
           level: "warning",

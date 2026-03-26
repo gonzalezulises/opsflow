@@ -187,7 +187,7 @@ export function VSMTable({ caseId, initialSteps, state = "current", initiatives 
         toast.success("VSM guardado");
       }
     });
-  }, [steps, caseId, markClean]);
+  }, [steps, caseId, state, markClean]);
 
   return (
     <div className="space-y-6">
