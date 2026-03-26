@@ -160,6 +160,19 @@ export const improvementNarrativeSchema = z.object({
   strengthenedNarrative: z.string().describe("Versión mejorada de la narrativa de mejora — máximo 150 palabras, tono ejecutivo, basada solo en datos proporcionados"),
 });
 
+// ─── SCAMPER idea generation ───
+
+export const scamperIdeasSchema = z.object({
+  ideas: z.array(z.object({
+    category: z.enum(["Sustituir", "Combinar", "Adaptar", "Modificar", "Poner otro uso", "Eliminar", "Revertir"]).describe("Dimensión SCAMPER en español"),
+    title: z.string().describe("Título corto de la idea (máx 10 palabras)"),
+    description: z.string().describe("Descripción concreta de la idea referenciando elementos reales del caso"),
+    affectedSteps: z.array(z.string()).describe("Nombres de los pasos del VSM que se verían afectados"),
+    improvementType: z.enum(["tiempo", "costo", "calidad", "flujo"]).describe("Tipo principal de mejora"),
+    estimatedImpact: z.enum(["alto", "medio", "bajo"]).describe("Impacto estimado"),
+  })).describe("Ideas SCAMPER generadas — al menos 1 por cada dimensión, máximo 14 total"),
+});
+
 export type DiagnosticSummary = z.infer<typeof diagnosticSummarySchema>;
 export type VSMAnalysis = z.infer<typeof vsmAnalysisSchema>;
 export type RiskRecommendations = z.infer<typeof riskRecommendationsSchema>;
@@ -172,3 +185,4 @@ export type RiskGeneration = z.infer<typeof riskGenerationSchema>;
 export type InitiativeGeneration = z.infer<typeof initiativeGenerationSchema>;
 export type ActionPlanGeneration = z.infer<typeof actionPlanGenerationSchema>;
 export type ImprovementNarrativeAI = z.infer<typeof improvementNarrativeSchema>;
+export type ScamperIdeas = z.infer<typeof scamperIdeasSchema>;

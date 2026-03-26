@@ -104,6 +104,33 @@ INSTRUCCIONES:
 - Si detectas datos inconsistentes, señálalo en inconsistencies.`;
 }
 
+// ─── SCAMPER idea generation ───
+
+export function scamperPrompt(context: string): string {
+  return `Genera ideas de mejora operativa usando el método SCAMPER aplicado a los datos reales de este caso.
+
+SCAMPER:
+- Sustituir: ¿Qué sistema, recurso o paso se puede reemplazar por uno mejor?
+- Combinar: ¿Qué pasos, roles o validaciones se pueden fusionar?
+- Adaptar: ¿Qué práctica de otra industria o proceso se puede traer aquí?
+- Modificar: ¿Qué parámetro (tiempo, frecuencia, orden) se puede alterar?
+- Poner otro uso: ¿Qué recurso existente se puede reutilizar para otro fin?
+- Eliminar: ¿Qué paso, validación o espera se puede quitar sin perder valor?
+- Revertir: ¿Qué secuencia se puede invertir para mejorar el flujo?
+
+DATOS DEL CASO:
+${context}
+
+INSTRUCCIONES:
+- Genera al menos 1 idea por cada dimensión SCAMPER (mínimo 7 ideas).
+- Cada idea DEBE referenciar pasos, desperdicios o riesgos reales del caso — NO ideas genéricas.
+- En affectedSteps usa los nombres exactos de los pasos del VSM proporcionados.
+- El title debe ser accionable y corto (máx 10 palabras).
+- La description debe explicar qué se hace y por qué funciona (2-3 oraciones).
+- Prioriza ideas ejecutables en 30 días con recursos limitados.
+- Si hay cuellos de botella claros (esperas >8h, retrabajo >10%), enfócate ahí.`;
+}
+
 // ─── Generation prompts (cross-module) ───
 
 export function riskGenerationPrompt(context: string): string {

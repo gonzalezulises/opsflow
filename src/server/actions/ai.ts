@@ -11,6 +11,7 @@ import {
   weeklyReviewSchema,
   executiveReportSchema,
   improvementNarrativeSchema,
+  scamperIdeasSchema,
   riskGenerationSchema,
   initiativeGenerationSchema,
   actionPlanGenerationSchema,
@@ -25,6 +26,7 @@ import {
   weeklyReviewPrompt,
   executiveReportPrompt,
   improvementNarrativePrompt,
+  scamperPrompt,
   riskGenerationPrompt,
   initiativeGenerationPrompt,
   actionPlanGenerationPrompt,
@@ -48,7 +50,8 @@ export type AIActionType =
   | "risk_generation"
   | "initiative_generation"
   | "action_plan_generation"
-  | "improvement_narrative";
+  | "improvement_narrative"
+  | "scamper_ideas";
 
 const SCHEMA_MAP = {
   diagnostic_summary: { schema: diagnosticSummarySchema, promptFn: diagnosticPrompt, name: "diagnostic_summary" },
@@ -63,6 +66,7 @@ const SCHEMA_MAP = {
   initiative_generation: { schema: initiativeGenerationSchema, promptFn: initiativeGenerationPrompt, name: "initiative_generation" },
   action_plan_generation: { schema: actionPlanGenerationSchema, promptFn: actionPlanGenerationPrompt, name: "action_plan_generation" },
   improvement_narrative: { schema: improvementNarrativeSchema, promptFn: improvementNarrativePrompt, name: "improvement_narrative" },
+  scamper_ideas: { schema: scamperIdeasSchema, promptFn: scamperPrompt, name: "scamper_ideas" },
 } as const;
 
 export async function getAIInsight(

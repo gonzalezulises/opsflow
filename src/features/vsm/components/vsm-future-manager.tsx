@@ -6,9 +6,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VSMTable } from "./vsm-table";
 import { VSMComparisonView } from "./vsm-comparison";
 import { ScenarioManager } from "./scenario-manager";
+import { ScamperPanel } from "./scamper-panel";
 import { calculateVSM, compareVSM, diffSteps, generateImprovementNarrative, checkPlausibility, type ProcessStep } from "@/lib/calculations/vsm";
 import { cloneCurrentToFuture, deleteFutureVSM } from "@/server/actions/vsm";
-import { GitBranch, Copy, Trash2, BarChart3, Layers, Loader2 } from "lucide-react";
+import { GitBranch, Copy, Trash2, BarChart3, Layers, Lightbulb, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -167,6 +168,10 @@ export function VSMFutureManager({
             <Layers className="size-4" />
             Escenarios{scenarios.length > 0 ? ` (${scenarios.length})` : ""}
           </TabsTrigger>
+          <TabsTrigger value="scamper" className="gap-1.5">
+            <Lightbulb className="size-4" />
+            Ideas SCAMPER
+          </TabsTrigger>
         </TabsList>
 
         <div className="flex gap-2 shrink-0">
@@ -215,6 +220,15 @@ export function VSMFutureManager({
           scenarios={scenarios.map((s) => ({ id: s.id, name: s.name, description: s.description, steps: s.steps }))}
           hasFuture={futureExists}
         />
+      </TabsContent>
+
+      <TabsContent value="scamper">
+        <ScamperPanel contextBuilder={() => {
+          const stepsText = currentSteps.map((s, i) =>
+            `${i + 1}. ${s.stepName} (${s.department ?? "?"}) — Proceso: ${Number(s.processTimeMinutes) || 0}min, Espera: ${Number(s.waitTimeHours) || 0}h, Retrabajo: ${Number(s.reworkPercentage) || 0}%, Valor: ${s.addsValue ? "Sí" : "No"}`
+          ).join("\n");
+          return `PASOS DEL VSM:\n${stepsText}`;
+        }} />
       </TabsContent>
     </Tabs>
   );
