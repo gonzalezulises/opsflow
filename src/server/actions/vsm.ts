@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { eq, and, asc } from "drizzle-orm";
 import { db } from "@/server/db";
-import { processSteps } from "@/server/db/schema";
+import { processSteps, processStepInitiatives } from "@/server/db/schema";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -143,6 +143,18 @@ export async function saveAllProcessSteps(
         .insert(processSteps)
         .values(validatedSteps)
         .returning();
+
+      // Dual-write: sync join table from linkedInitiativeIds
+      const inserts: { processStepId: string; initiativeId: string }[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const ids = (rows[i].linkedInitiativeIds as string[] | null) ?? [];
+        for (const initId of ids) {
+          inserts.push({ processStepId: rows[i].id, initiativeId: initId });
+        }
+      }
+      if (inserts.length > 0) {
+        await tx.insert(processStepInitiatives).values(inserts);
+      }
 
       return rows;
     });
