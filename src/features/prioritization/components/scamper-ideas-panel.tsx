@@ -26,9 +26,17 @@ const IMPACT_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   bajo: "outline",
 };
 
+export interface ScamperInitiativeData {
+  name: string;
+  description: string;
+  improvementType: "tiempo" | "costo" | "calidad" | "flujo";
+  estimatedImpact: "alto" | "medio" | "bajo";
+  affectedSteps: string[];
+}
+
 interface ScamperIdeasPanelProps {
   scamperContext: string;
-  onConvertToInitiative: (name: string, description: string) => void;
+  onConvertToInitiative: (data: ScamperInitiativeData) => void;
 }
 
 export function ScamperIdeasPanel({ scamperContext, onConvertToInitiative }: ScamperIdeasPanelProps) {
@@ -54,10 +62,13 @@ export function ScamperIdeasPanel({ scamperContext, onConvertToInitiative }: Sca
   }
 
   function handleConvert(idea: ScamperIdeas["ideas"][0], index: number) {
-    onConvertToInitiative(
-      idea.title,
-      `[SCAMPER/${idea.category}] ${idea.description}`,
-    );
+    onConvertToInitiative({
+      name: idea.title,
+      description: `[SCAMPER/${idea.category}] ${idea.description}`,
+      improvementType: idea.improvementType,
+      estimatedImpact: idea.estimatedImpact,
+      affectedSteps: idea.affectedSteps,
+    });
     setConverted((prev) => new Set(prev).add(index));
     toast.success(`"${idea.title}" agregada como iniciativa`);
   }

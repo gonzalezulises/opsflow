@@ -23,7 +23,7 @@ import {
 import { saveAllInitiatives } from "@/server/actions/prioritization";
 import { generateFromAI } from "@/server/actions/ai";
 import { AIPanel } from "@/components/shared/ai-panel";
-import { ScamperIdeasPanel } from "./scamper-ideas-panel";
+import { ScamperIdeasPanel, type ScamperInitiativeData } from "./scamper-ideas-panel";
 import { SaveBar } from "@/components/shared/save-bar";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { toast } from "sonner";
@@ -121,19 +121,25 @@ export function PrioritizationMatrix({
     markDirty();
   }
 
-  function addFromScamper(name: string, description: string) {
+  function addFromScamper(data: ScamperInitiativeData) {
+    // Map SCAMPER impact/type to initiative scores
+    const impactBase = data.estimatedImpact === "alto" ? 5 : data.estimatedImpact === "medio" ? 4 : 3;
+    const scores = {
+      impactLeadTime: data.improvementType === "tiempo" || data.improvementType === "flujo" ? impactBase : Math.max(impactBase - 1, 2),
+      impactEconomic: data.improvementType === "costo" ? impactBase : Math.max(impactBase - 1, 2),
+      impactResilience: data.improvementType === "calidad" ? impactBase : Math.max(impactBase - 2, 2),
+      feasibility30d: 3,
+      effort: 3,
+      externalDependency: 2,
+    };
+
     setInitiatives((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
-        name,
-        description,
-        impactLeadTime: 3,
-        impactEconomic: 3,
-        impactResilience: 3,
-        feasibility30d: 3,
-        effort: 3,
-        externalDependency: 3,
+        name: data.name,
+        description: `${data.description}\nPasos afectados: ${data.affectedSteps.join(", ")}`,
+        ...scores,
       },
     ]);
     markDirty();
