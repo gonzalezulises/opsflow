@@ -253,6 +253,25 @@ export const diagnosticResponses = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// 8b. vsm_scenarios
+// ---------------------------------------------------------------------------
+
+export const vsmScenarios = pgTable(
+  "vsm_scenarios",
+  {
+    ...auditColumns,
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id),
+    name: text("name").notNull(),
+    description: text("description"),
+  },
+  (t) => [
+    index("vsm_scenarios_case_id_idx").on(t.caseId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // 9. process_steps
 // ---------------------------------------------------------------------------
 
@@ -274,6 +293,7 @@ export const processSteps = pgTable(
     addsValue: boolean("adds_value"),
     observations: text("observations"),
     vsmState: vsmStateEnum("vsm_state").notNull().default("current"),
+    scenarioId: uuid("scenario_id"),
     sourceStepId: uuid("source_step_id"),
     justification: text("justification"),
     linkedInitiativeIds: jsonb("linked_initiative_ids").$type<string[]>(),
