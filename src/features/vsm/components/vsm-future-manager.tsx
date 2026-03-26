@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VSMTable } from "./vsm-table";
 import { VSMComparisonView } from "./vsm-comparison";
+import { ScenarioManager } from "./scenario-manager";
 import { calculateVSM, compareVSM, diffSteps, generateImprovementNarrative, type ProcessStep } from "@/lib/calculations/vsm";
 import { cloneCurrentToFuture, deleteFutureVSM } from "@/server/actions/vsm";
-import { GitBranch, Copy, Trash2, BarChart3, Loader2 } from "lucide-react";
+import { GitBranch, Copy, Trash2, BarChart3, Layers, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -49,12 +50,20 @@ export interface InitiativeOption {
   classification: string | null;
 }
 
+interface ScenarioData {
+  id: string;
+  name: string;
+  description: string | null;
+  steps: DBProcessStep[];
+}
+
 interface VSMFutureManagerProps {
   caseId: string;
   currentSteps: DBProcessStep[];
   futureSteps: DBProcessStep[];
   futureExists: boolean;
   initiatives?: InitiativeOption[];
+  scenarios?: ScenarioData[];
 }
 
 export function VSMFutureManager({
@@ -63,6 +72,7 @@ export function VSMFutureManager({
   futureSteps,
   futureExists,
   initiatives = [],
+  scenarios = [],
 }: VSMFutureManagerProps) {
   const router = useRouter();
   const [cloning, setCloning] = useState(false);
@@ -151,6 +161,10 @@ export function VSMFutureManager({
               </TabsTrigger>
             </>
           )}
+          <TabsTrigger value="scenarios" className="gap-1.5">
+            <Layers className="size-4" />
+            Escenarios{scenarios.length > 0 ? ` (${scenarios.length})` : ""}
+          </TabsTrigger>
         </TabsList>
 
         <div className="flex gap-2 shrink-0">
@@ -190,6 +204,16 @@ export function VSMFutureManager({
           </TabsContent>
         </>
       )}
+
+      <TabsContent value="scenarios">
+        <ScenarioManager
+          caseId={caseId}
+          currentSteps={currentSteps}
+          futureSteps={futureSteps}
+          scenarios={scenarios.map((s) => ({ id: s.id, name: s.name, description: s.description, steps: s.steps }))}
+          hasFuture={futureExists}
+        />
+      </TabsContent>
     </Tabs>
   );
 }
