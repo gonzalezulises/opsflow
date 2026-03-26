@@ -10,8 +10,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap } from "lucide-react";
-import { type VSMComparison } from "@/lib/calculations/vsm";
+import { Separator } from "@/components/ui/separator";
+import { ArrowDown, ArrowUp, Minus, TrendingDown, Zap, FileText, MessageSquareQuote } from "lucide-react";
+import { type VSMComparison, type ImprovementNarrative } from "@/lib/calculations/vsm";
 
 function fmt(n: number) {
   return n.toFixed(2);
@@ -37,10 +38,11 @@ function DeltaBadge({ delta, deltaPct, improved }: { delta: number; deltaPct: nu
 
 interface VSMComparisonViewProps {
   comparison: VSMComparison;
+  narrative: ImprovementNarrative;
   futureSteps: { name: string; justification: string }[];
 }
 
-export function VSMComparisonView({ comparison, futureSteps }: VSMComparisonViewProps) {
+export function VSMComparisonView({ comparison, narrative, futureSteps }: VSMComparisonViewProps) {
   const { metrics, summary } = comparison;
 
   return (
@@ -123,11 +125,66 @@ export function VSMComparisonView({ comparison, futureSteps }: VSMComparisonView
         </CardContent>
       </Card>
 
-      {/* Justifications */}
+      <Separator />
+
+      {/* Improvement narrative */}
+      <Card className="border-primary/20 bg-primary/[0.02]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base font-bold">
+            <FileText className="size-4 text-primary" />
+            Resumen de mejora
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm font-medium leading-relaxed">{narrative.headline}</p>
+
+          {narrative.bullets.length > 0 && (
+            <ul className="space-y-1.5 text-sm text-muted-foreground">
+              {narrative.bullets.map((b, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="shrink-0 text-primary">—</span>
+                  {b}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Top changes with justifications */}
+      {narrative.topChanges.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base font-bold">
+              <MessageSquareQuote className="size-4" />
+              Top {narrative.topChanges.length} cambios de mayor impacto
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {narrative.topChanges.map((change, i) => (
+              <div key={i} className="rounded-lg border p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge>{i + 1}</Badge>
+                  <span className="font-semibold">{change.step}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{change.description}</p>
+                {change.justification && (
+                  <div className="flex items-start gap-2 rounded-md bg-muted/50 p-2.5 text-sm">
+                    <MessageSquareQuote className="size-3.5 shrink-0 mt-0.5 text-primary" />
+                    <p className="italic text-muted-foreground">&ldquo;{change.justification}&rdquo;</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* All justifications */}
       {futureSteps.some((s) => s.justification) && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-bold">Justificación de cambios</CardTitle>
+            <CardTitle className="text-base font-bold">Todas las justificaciones</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

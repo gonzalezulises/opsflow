@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VSMTable } from "./vsm-table";
 import { VSMComparisonView } from "./vsm-comparison";
-import { calculateVSM, compareVSM, type ProcessStep } from "@/lib/calculations/vsm";
+import { calculateVSM, compareVSM, diffSteps, generateImprovementNarrative, type ProcessStep } from "@/lib/calculations/vsm";
 import { cloneCurrentToFuture, deleteFutureVSM } from "@/server/actions/vsm";
 import { GitBranch, Copy, Trash2, BarChart3, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -59,11 +59,35 @@ export function VSMFutureManager({
   const [cloning, setCloning] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const comparison = useMemo(() => {
-    if (!futureExists || futureSteps.length === 0) return null;
+  const { comparison, narrative } = useMemo(() => {
+    if (!futureExists || futureSteps.length === 0) return { comparison: null, narrative: null };
     const current = calculateVSM(toCalcSteps(currentSteps));
     const future = calculateVSM(toCalcSteps(futureSteps));
-    return compareVSM(current, future);
+    const comp = compareVSM(current, future);
+
+    const currentRaw = currentSteps.map((s) => ({
+      id: s.id,
+      stepName: s.stepName,
+      processTimeMinutes: Number(s.processTimeMinutes) || 0,
+      waitTimeHours: Number(s.waitTimeHours) || 0,
+      reworkPercentage: Number(s.reworkPercentage) || 0,
+      sourceStepId: s.sourceStepId,
+      justification: s.justification ?? "",
+    }));
+    const futureRaw = futureSteps.map((s) => ({
+      id: s.id,
+      stepName: s.stepName,
+      processTimeMinutes: Number(s.processTimeMinutes) || 0,
+      waitTimeHours: Number(s.waitTimeHours) || 0,
+      reworkPercentage: Number(s.reworkPercentage) || 0,
+      sourceStepId: s.sourceStepId,
+      justification: s.justification ?? "",
+    }));
+
+    const diffs = diffSteps(currentRaw, futureRaw);
+    const narr = generateImprovementNarrative(comp, diffs);
+
+    return { comparison: comp, narrative: narr };
   }, [currentSteps, futureSteps, futureExists]);
 
   async function handleClone() {
@@ -145,8 +169,8 @@ export function VSMFutureManager({
           </TabsContent>
 
           <TabsContent value="compare">
-            {comparison ? (
-              <VSMComparisonView comparison={comparison} futureSteps={justifiedSteps} />
+            {comparison && narrative ? (
+              <VSMComparisonView comparison={comparison} narrative={narrative} futureSteps={justifiedSteps} />
             ) : (
               <p className="py-8 text-center text-muted-foreground">
                 Guarda cambios en el VSM futuro para ver la comparación.

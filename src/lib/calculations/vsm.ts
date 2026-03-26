@@ -96,6 +96,179 @@ function round(n: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Step-level diff (current step ↔ linked future step)
+// ---------------------------------------------------------------------------
+
+export interface StepDiff {
+  name: string;
+  futureName: string;
+  renamed: boolean;
+  removed: boolean;
+  added: boolean;
+  waitDelta: number;
+  processDelta: number;
+  reworkDelta: number;
+  justification: string;
+  impactScore: number; // abs sum of time deltas — higher = more impactful
+}
+
+interface RawStep {
+  id: string;
+  stepName: string;
+  processTimeMinutes: number;
+  waitTimeHours: number;
+  reworkPercentage: number;
+  sourceStepId: string | null;
+  justification: string;
+}
+
+export function diffSteps(currentRaw: RawStep[], futureRaw: RawStep[]): StepDiff[] {
+  const diffs: StepDiff[] = [];
+  const matchedCurrentIds = new Set<string>();
+
+  // Matched steps (future has sourceStepId pointing to current)
+  for (const f of futureRaw) {
+    if (!f.sourceStepId) {
+      // New step added in future
+      diffs.push({
+        name: "(nuevo)",
+        futureName: f.stepName,
+        renamed: false,
+        removed: false,
+        added: true,
+        waitDelta: 0,
+        processDelta: 0,
+        reworkDelta: 0,
+        justification: f.justification,
+        impactScore: f.waitTimeHours * 60 + f.processTimeMinutes,
+      });
+      continue;
+    }
+
+    const c = currentRaw.find((s) => s.id === f.sourceStepId);
+    if (!c) continue;
+
+    matchedCurrentIds.add(c.id);
+
+    const waitDelta = round(f.waitTimeHours - c.waitTimeHours);
+    const processDelta = round(f.processTimeMinutes - c.processTimeMinutes);
+    const reworkDelta = round(f.reworkPercentage - c.reworkPercentage);
+
+    diffs.push({
+      name: c.stepName,
+      futureName: f.stepName,
+      renamed: c.stepName !== f.stepName,
+      removed: false,
+      added: false,
+      waitDelta,
+      processDelta,
+      reworkDelta,
+      justification: f.justification,
+      impactScore: Math.abs(waitDelta * 60) + Math.abs(processDelta) + Math.abs(reworkDelta * 10),
+    });
+  }
+
+  // Steps in current that were removed in future
+  for (const c of currentRaw) {
+    if (!matchedCurrentIds.has(c.id) && !futureRaw.some((f) => f.sourceStepId === c.id)) {
+      diffs.push({
+        name: c.stepName,
+        futureName: "",
+        renamed: false,
+        removed: true,
+        added: false,
+        waitDelta: -c.waitTimeHours,
+        processDelta: -c.processTimeMinutes,
+        reworkDelta: -c.reworkPercentage,
+        justification: "",
+        impactScore: c.waitTimeHours * 60 + c.processTimeMinutes,
+      });
+    }
+  }
+
+  return diffs.sort((a, b) => b.impactScore - a.impactScore);
+}
+
+// ---------------------------------------------------------------------------
+// Narrative generation (pure, no AI)
+// ---------------------------------------------------------------------------
+
+export interface ImprovementNarrative {
+  headline: string;
+  bullets: string[];
+  topChanges: { step: string; description: string; justification: string }[];
+}
+
+export function generateImprovementNarrative(
+  comparison: VSMComparison,
+  stepDiffs: StepDiff[],
+): ImprovementNarrative {
+  const { summary } = comparison;
+  const fmt = (n: number) => Math.abs(n).toFixed(1);
+
+  // Headline
+  const parts: string[] = [];
+  if (summary.leadTimeReduction > 0) {
+    parts.push(`reduce el lead time en ${fmt(summary.leadTimeReduction)} horas (${fmt(summary.leadTimeReductionPct)}%)`);
+  }
+  if (summary.efficiencyGain > 0) {
+    parts.push(`mejora la eficiencia de flujo en ${fmt(summary.efficiencyGain)} puntos porcentuales`);
+  }
+  const headline = parts.length > 0
+    ? `El estado futuro propuesto ${parts.join(" y ")}.`
+    : "El estado futuro no muestra cambios significativos respecto al actual.";
+
+  // Bullets — sources of improvement
+  const bullets: string[] = [];
+  const waitMetric = comparison.metrics.find((m) => m.label === "Tiempo de espera");
+  if (waitMetric && waitMetric.delta < 0) {
+    bullets.push(`Espera reducida en ${fmt(Math.abs(waitMetric.delta))} horas — principal fuente de mejora del lead time.`);
+  }
+  const processMetric = comparison.metrics.find((m) => m.label === "Tiempo de proceso");
+  if (processMetric && processMetric.delta < 0) {
+    bullets.push(`Tiempo de proceso reducido en ${fmt(Math.abs(processMetric.delta))} minutos.`);
+  }
+  if (summary.stepsRemoved > 0) {
+    bullets.push(`${summary.stepsRemoved} paso(s) eliminado(s), reduciendo complejidad y handoffs.`);
+  }
+  if (summary.reworkReduction > 0) {
+    bullets.push(`Retrabajo promedio reducido en ${fmt(summary.reworkReduction)} puntos porcentuales.`);
+  }
+  const addedSteps = stepDiffs.filter((d) => d.added);
+  if (addedSteps.length > 0) {
+    bullets.push(`${addedSteps.length} paso(s) nuevo(s) agregado(s) para controlar o prevenir problemas.`);
+  }
+
+  // Top 3 changes with most impact
+  const topChanges = stepDiffs
+    .filter((d) => d.impactScore > 0)
+    .slice(0, 3)
+    .map((d) => {
+      let description: string;
+      if (d.removed) {
+        description = `Paso eliminado — liberó ${fmt(Math.abs(d.waitDelta))}h de espera y ${fmt(Math.abs(d.processDelta))}min de proceso.`;
+      } else if (d.added) {
+        description = `Nuevo paso agregado en el flujo futuro.`;
+      } else {
+        const changes: string[] = [];
+        if (d.waitDelta !== 0) changes.push(`espera ${d.waitDelta < 0 ? "reducida" : "aumentada"} en ${fmt(Math.abs(d.waitDelta))}h`);
+        if (d.processDelta !== 0) changes.push(`proceso ${d.processDelta < 0 ? "reducido" : "aumentado"} en ${fmt(Math.abs(d.processDelta))}min`);
+        if (d.reworkDelta !== 0) changes.push(`retrabajo ${d.reworkDelta < 0 ? "reducido" : "aumentado"} en ${fmt(Math.abs(d.reworkDelta))}pp`);
+        if (d.renamed) changes.push(`renombrado a "${d.futureName}"`);
+        description = changes.length > 0 ? changes.join(", ") + "." : "Sin cambios numéricos significativos.";
+      }
+
+      return {
+        step: d.removed ? `${d.name} (eliminado)` : d.added ? d.futureName : d.name,
+        description,
+        justification: d.justification,
+      };
+    });
+
+  return { headline, bullets, topChanges };
+}
+
+// ---------------------------------------------------------------------------
 // VSM Comparison (Current vs Future)
 // ---------------------------------------------------------------------------
 
