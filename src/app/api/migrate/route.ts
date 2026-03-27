@@ -108,6 +108,21 @@ export async function GET() {
       }
     }
 
+    // Fix: ensure CASCADE on initiative_id FK (may be missing if table was created before fix)
+    try {
+      await db.execute(sql`
+        ALTER TABLE "process_step_initiatives"
+        DROP CONSTRAINT IF EXISTS "process_step_initiatives_initiative_id_initiatives_id_fk"
+      `);
+      await db.execute(sql`
+        ALTER TABLE "process_step_initiatives"
+        ADD CONSTRAINT "process_step_initiatives_initiative_id_initiatives_id_fk"
+        FOREIGN KEY ("initiative_id") REFERENCES "initiatives"("id") ON DELETE CASCADE
+      `);
+    } catch {
+      // Constraint may already be correct
+    }
+
     return NextResponse.json({ status: "ok", message: "All migrations applied", backfilled });
   } catch (error) {
     return NextResponse.json(

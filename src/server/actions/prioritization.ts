@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db";
-import { initiatives, prioritizationWeights } from "@/server/db/schema";
+import { initiatives, prioritizationWeights, processStepInitiatives } from "@/server/db/schema";
 import {
   calculatePrioritizationScore,
   DEFAULT_WEIGHTS,
@@ -206,6 +206,19 @@ export async function saveAllInitiatives(
     const weights = await getWeightsForCase(caseId);
 
     const result = await db.transaction(async (tx) => {
+      // Delete join table records for initiatives being replaced
+      const existingInits = await tx
+        .select({ id: initiatives.id })
+        .from(initiatives)
+        .where(eq(initiatives.caseId, caseId));
+
+      if (existingInits.length > 0) {
+        const ids = existingInits.map((i) => i.id);
+        await tx
+          .delete(processStepInitiatives)
+          .where(inArray(processStepInitiatives.initiativeId, ids));
+      }
+
       await tx.delete(initiatives).where(eq(initiatives.caseId, caseId));
 
       if (items.length === 0) return [];
