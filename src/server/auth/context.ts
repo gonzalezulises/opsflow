@@ -1,5 +1,3 @@
-"use server";
-
 export {
   requireMembershipContext,
   requireMembershipContext as requireOrganizationContext,
