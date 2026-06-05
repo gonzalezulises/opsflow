@@ -5,6 +5,10 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { actionItems } from "@/server/db/schema";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -41,6 +45,9 @@ const statusSchema = z.enum([
 
 export async function getActionItems(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(actionItems)
@@ -64,6 +71,9 @@ export async function saveActionItem(
 
   const { id, ...values } = parsed.data;
 
+  const writeGate = await requireWritableCase(values.caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     let row;
     if (id) {
@@ -79,7 +89,7 @@ export async function saveActionItem(
         .returning();
     }
 
-    revalidatePath(`/cases/${values.caseId}`);
+    revalidatePath(`/dashboard/cases/${values.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -88,6 +98,16 @@ export async function saveActionItem(
 
 export async function deleteActionItem(id: string) {
   try {
+    const [existing] = await db
+      .select({ caseId: actionItems.caseId })
+      .from(actionItems)
+      .where(eq(actionItems.id, id));
+
+    if (!existing) return { error: "Acción no encontrada" };
+
+    const writeGate = await requireWritableCase(existing.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     const [row] = await db
       .delete(actionItems)
       .where(eq(actionItems.id, id))
@@ -95,7 +115,7 @@ export async function deleteActionItem(id: string) {
 
     if (!row) return { error: "Acción no encontrada" };
 
-    revalidatePath(`/cases/${row.caseId}`);
+    revalidatePath(`/dashboard/cases/${row.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -106,6 +126,9 @@ export async function saveAllActionItems(
   caseId: string,
   items: z.input<typeof actionItemSchema>[],
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const result = await db.transaction(async (tx) => {
       await tx.delete(actionItems).where(eq(actionItems.caseId, caseId));
@@ -127,7 +150,7 @@ export async function saveAllActionItems(
       return rows;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: result };
   } catch (e) {
     return { error: (e as Error).message };
@@ -142,6 +165,16 @@ export async function updateActionItemStatus(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
+    const [existing] = await db
+      .select({ caseId: actionItems.caseId })
+      .from(actionItems)
+      .where(eq(actionItems.id, id));
+
+    if (!existing) return { error: "Acción no encontrada" };
+
+    const writeGate = await requireWritableCase(existing.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     const [row] = await db
       .update(actionItems)
       .set({ status: parsed.data, updatedAt: new Date() })
@@ -150,7 +183,7 @@ export async function updateActionItemStatus(
 
     if (!row) return { error: "Acción no encontrada" };
 
-    revalidatePath(`/cases/${row.caseId}`);
+    revalidatePath(`/dashboard/cases/${row.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import * as schema from "@/server/db/schema";
+import { guardAdminApiRoute } from "@/server/lib/admin-api-route";
 
 // ---------------------------------------------------------------------------
 // Helpers (duplicated from seed script to avoid dotenv import issues)
@@ -49,7 +50,10 @@ function calcWaste(p: {
 // GET /api/seed — idempotent, creates template if missing
 // ---------------------------------------------------------------------------
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = guardAdminApiRoute(request);
+  if (denied) return denied;
+
   try {
     // 1. Org
     const existingOrgs = await db
@@ -62,21 +66,7 @@ export async function GET() {
     if (existingOrgs.length > 0) {
       orgId = existingOrgs[0]!.id;
 
-      // Check if template already exists
-      const existingTemplates = await db
-        .select({ id: schema.cases.id })
-        .from(schema.cases)
-        .where(eq(schema.cases.organizationId, orgId));
-
-      const hasTemplate = existingTemplates.some(async (c) => {
-        const [row] = await db
-          .select({ isTemplate: schema.cases.isTemplate })
-          .from(schema.cases)
-          .where(eq(schema.cases.id, c.id));
-        return row?.isTemplate;
-      });
-
-      // Check directly
+      // Check directly for any template
       const templates = await db
         .select({ id: schema.cases.id, name: schema.cases.name })
         .from(schema.cases)

@@ -48,6 +48,7 @@ interface InitiativeOption {
 }
 
 interface VSMComparisonViewProps {
+  caseId: string;
   comparison: VSMComparison;
   narrative: ImprovementNarrative;
   futureSteps: { name: string; justification: string }[];
@@ -76,7 +77,7 @@ function groupByInitiative(diffs: StepDiff[], initiatives: InitiativeOption[]) {
   );
 }
 
-export function VSMComparisonView({ comparison, narrative, futureSteps, initiatives = [], stepDiffs = [], warnings = [] }: VSMComparisonViewProps) {
+export function VSMComparisonView({ caseId, comparison, narrative, futureSteps, initiatives = [], stepDiffs = [], warnings = [] }: VSMComparisonViewProps) {
   const { metrics, summary } = comparison;
   const [aiResult, setAiResult] = useState<ImprovementNarrativeAI | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -91,7 +92,7 @@ export function VSMComparisonView({ comparison, narrative, futureSteps, initiati
       `WARNINGS: ${warnings.map((w) => `[${w.step}] ${w.message}`).join(" | ") || "Ninguno"}`,
     ].join("\n");
 
-    const { data, error } = await getAIInsight("improvement_narrative", context);
+    const { data, error } = await getAIInsight("improvement_narrative", context, caseId);
     setAiLoading(false);
     if (error) {
       toast.error(error);

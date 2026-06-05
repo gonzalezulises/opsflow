@@ -22,12 +22,13 @@ interface AIAction {
 }
 
 interface AIPanelProps {
+  caseId: string;
   module: string;
   actions: AIAction[];
   contextBuilder: () => string;
 }
 
-export function AIPanel({ module, actions, contextBuilder }: AIPanelProps) {
+export function AIPanel({ caseId, module, actions, contextBuilder }: AIPanelProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export function AIPanel({ module, actions, contextBuilder }: AIPanelProps) {
     setActiveAction(action.label);
 
     const context = contextBuilder();
-    const response = await getAIInsight(action.type, context);
+    const response = await getAIInsight(action.type, context, caseId);
 
     if (response.error) {
       setError(response.error);

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +14,21 @@ export default function SettingsPage() {
           Ajustes de la organización y preferencias
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Miembros y organizaciones</CardTitle>
+          <CardDescription>
+            Ver miembros de la organización activa y cambiar de organización si
+            tienes varias
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button render={<Link href="/dashboard/settings/members" />}>
+            Abrir
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

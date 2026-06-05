@@ -5,6 +5,10 @@ import { z } from "zod";
 import { eq, asc } from "drizzle-orm";
 import { db } from "@/server/db";
 import { weeklyMetrics } from "@/server/db/schema";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -30,6 +34,9 @@ const weeklyMetricSchema = z.object({
 
 export async function getWeeklyMetrics(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(weeklyMetrics)
@@ -54,6 +61,9 @@ export async function saveWeeklyMetric(
 
   const { id, ...values } = parsed.data;
 
+  const writeGate = await requireWritableCase(values.caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     let row;
     if (id) {
@@ -69,7 +79,7 @@ export async function saveWeeklyMetric(
         .returning();
     }
 
-    revalidatePath(`/cases/${values.caseId}`);
+    revalidatePath(`/dashboard/cases/${values.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -80,6 +90,9 @@ export async function saveAllWeeklyMetrics(
   caseId: string,
   items: z.input<typeof weeklyMetricSchema>[],
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const result = await db.transaction(async (tx) => {
       await tx.delete(weeklyMetrics).where(eq(weeklyMetrics.caseId, caseId));
@@ -101,7 +114,7 @@ export async function saveAllWeeklyMetrics(
       return rows;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: result };
   } catch (e) {
     return { error: (e as Error).message };
@@ -110,6 +123,16 @@ export async function saveAllWeeklyMetrics(
 
 export async function deleteWeeklyMetric(id: string) {
   try {
+    const [existing] = await db
+      .select({ caseId: weeklyMetrics.caseId })
+      .from(weeklyMetrics)
+      .where(eq(weeklyMetrics.id, id));
+
+    if (!existing) return { error: "Métrica no encontrada" };
+
+    const writeGate = await requireWritableCase(existing.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     const [row] = await db
       .delete(weeklyMetrics)
       .where(eq(weeklyMetrics.id, id))
@@ -117,7 +140,7 @@ export async function deleteWeeklyMetric(id: string) {
 
     if (!row) return { error: "Métrica no encontrada" };
 
-    revalidatePath(`/cases/${row.caseId}`);
+    revalidatePath(`/dashboard/cases/${row.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };

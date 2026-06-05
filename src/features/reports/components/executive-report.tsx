@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,11 @@ import {
   CalendarDays,
   BarChart3,
   Printer,
+  Download,
 } from "lucide-react";
 import type { MaturityLevel } from "@/lib/calculations/diagnostic";
+import { exportCaseReportJson } from "@/server/actions/report-export";
+import { toast } from "sonner";
 
 export interface ReportData {
   case: {
@@ -120,6 +124,7 @@ function EmptyState({ label }: { label: string }) {
 
 export function ExecutiveReport({ caseId, data }: { caseId: string; data: ReportData }) {
   const { currency } = data.case;
+  const [exportPending, startExport] = useTransition();
 
   function buildContext() {
     const parts: string[] = [
@@ -152,6 +157,24 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
     return parts.join("\n");
   }
 
+  function handleExportJson() {
+    startExport(async () => {
+      const result = await exportCaseReportJson(caseId);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      const blob = new Blob([result.data], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `opsflow-case-${caseId}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Exportación lista");
+    });
+  }
+
   const moduleCount = [data.diagnostic, data.vsm, data.topRisk, data.topWaste, data.initiativesCount > 0, data.plan.totalActions > 0].filter(Boolean).length;
 
   return (
@@ -170,11 +193,20 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
           <p className="text-sm text-muted-foreground">{moduleCount} de 6 módulos completados</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            disabled={exportPending}
+            onClick={handleExportJson}
+          >
+            <Download className="mr-2 size-4" />
+            Exportar JSON
+          </Button>
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="mr-2 size-4" />
             Imprimir / PDF
           </Button>
           <AIPanel
+            caseId={caseId}
             module="Reporte ejecutivo"
             actions={[{ type: "executive_report", label: "Generar narrativa IA" }]}
             contextBuilder={buildContext}

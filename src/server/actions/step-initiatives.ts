@@ -3,6 +3,11 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { processStepInitiatives, processSteps, initiatives } from "@/server/db/schema";
+import {
+  assertProcessStepInOrganization,
+  assertInitiativeInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -13,6 +18,9 @@ import { processStepInitiatives, processSteps, initiatives } from "@/server/db/s
  */
 export async function getInitiativesByStep(stepId: string) {
   try {
+    const gate = await assertProcessStepInOrganization(stepId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select({
         initiativeId: processStepInitiatives.initiativeId,
@@ -34,6 +42,9 @@ export async function getInitiativesByStep(stepId: string) {
  */
 export async function getStepsByInitiative(initiativeId: string) {
   try {
+    const gate = await assertInitiativeInOrganization(initiativeId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select({
         processStepId: processStepInitiatives.processStepId,
@@ -63,7 +74,17 @@ export async function syncStepInitiatives(
   stepIds: string[],
   stepInitiativeMap: Map<string, string[]>,
 ) {
+  if (stepIds.length === 0) {
+    return { data: { synced: 0 } };
+  }
+
   try {
+    const gate = await assertProcessStepInOrganization(stepIds[0]!);
+    if ("error" in gate) return { error: gate.error };
+
+    const writeGate = await requireWritableCase(gate.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     await db.transaction(async (tx) => {
       // Delete existing links for these steps
       for (const stepId of stepIds) {

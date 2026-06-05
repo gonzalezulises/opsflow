@@ -26,17 +26,18 @@ const IMPACT_BADGE: Record<string, "default" | "secondary" | "outline"> = {
 };
 
 interface ScamperPanelProps {
+  caseId: string;
   contextBuilder: () => string;
 }
 
-export function ScamperPanel({ contextBuilder }: ScamperPanelProps) {
+export function ScamperPanel({ caseId, contextBuilder }: ScamperPanelProps) {
   const [ideas, setIdeas] = useState<ScamperIdeas["ideas"] | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleGenerate() {
     setLoading(true);
     const context = contextBuilder();
-    const { data, error } = await getAIInsight("scamper_ideas", context);
+    const { data, error } = await getAIInsight("scamper_ideas", context, caseId);
     setLoading(false);
 
     if (error) {

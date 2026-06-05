@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { eq, and, isNull, asc, desc, sql } from "drizzle-orm";
+import { eq, and, isNull, asc, desc, sql, inArray } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   cases,
-  organizations,
+  caseAssignments,
   diagnosticQuestions,
   diagnosticResponses,
   processSteps,
@@ -17,37 +17,14 @@ import {
   weeklyMetrics,
   prioritizationWeights,
 } from "@/server/db/schema";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
-const DEFAULT_TEMPLATE_ID = "00000000-0000-0000-0000-000000000002";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function getOrCreateDefaultOrg(): Promise<string> {
-  const [existing] = await db
-    .select({ id: organizations.id })
-    .from(organizations)
-    .where(eq(organizations.id, DEFAULT_ORG_ID));
-
-  if (existing) return existing.id;
-
-  const [created] = await db
-    .insert(organizations)
-    .values({
-      id: DEFAULT_ORG_ID,
-      name: "OpsFlow Demo",
-      slug: "opsflow-demo",
-    })
-    .returning();
-
-  return created.id;
-}
+import { requireOrganizationContext } from "@/server/auth/context";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
+import { canCreateCases, canDeleteCase } from "@/server/auth/permissions";
+import { logAuditEvent } from "@/server/auth/audit";
+import { DEFAULT_TEMPLATE_ID } from "@/server/auth/constants";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -81,13 +58,42 @@ const updateCaseSchema = z.object({
 
 export async function getCases() {
   try {
-    const orgId = await getOrCreateDefaultOrg();
+    const ctx = await requireOrganizationContext();
+    if ("error" in ctx) return { error: ctx.error };
+
+    if (ctx.role === "participant") {
+      const assigned = await db
+        .select({ caseId: caseAssignments.caseId })
+        .from(caseAssignments)
+        .where(eq(caseAssignments.userId, ctx.appUserId));
+
+      const ids = assigned.map((r) => r.caseId);
+      if (ids.length === 0) {
+        return { data: [] };
+      }
+
+      const rows = await db
+        .select()
+        .from(cases)
+        .where(
+          and(
+            eq(cases.organizationId, ctx.organizationId),
+            eq(cases.isTemplate, false),
+            isNull(cases.deletedAt),
+            inArray(cases.id, ids),
+          ),
+        )
+        .orderBy(desc(cases.createdAt));
+
+      return { data: rows };
+    }
+
     const rows = await db
       .select()
       .from(cases)
       .where(
         and(
-          eq(cases.organizationId, orgId),
+          eq(cases.organizationId, ctx.organizationId),
           eq(cases.isTemplate, false),
           isNull(cases.deletedAt),
         ),
@@ -102,6 +108,9 @@ export async function getCases() {
 
 export async function getCase(id: string) {
   try {
+    const gate = await requireCaseInOrganization(id);
+    if ("error" in gate) return { error: gate.error };
+
     const [row] = await db
       .select()
       .from(cases)
@@ -109,45 +118,57 @@ export async function getCase(id: string) {
 
     if (!row) return { error: "Caso no encontrado" };
 
-    const [dqCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(diagnosticQuestions)
-      .where(eq(diagnosticQuestions.caseId, id));
-
-    const [drCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(diagnosticResponses)
-      .where(eq(diagnosticResponses.caseId, id));
-
-    const [psCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(processSteps)
-      .where(eq(processSteps.caseId, id));
-
-    const [riCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(riskItems)
-      .where(eq(riskItems.caseId, id));
-
-    const [wiCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(wasteItems)
-      .where(eq(wasteItems.caseId, id));
-
-    const [inCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(initiatives)
-      .where(eq(initiatives.caseId, id));
-
-    const [aiCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(actionItems)
-      .where(eq(actionItems.caseId, id));
-
-    const [wmCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(weeklyMetrics)
-      .where(eq(weeklyMetrics.caseId, id));
+    const [
+      dqCount,
+      drCount,
+      psCount,
+      riCount,
+      wiCount,
+      inCount,
+      aiCount,
+      wmCount,
+    ] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(diagnosticQuestions)
+        .where(eq(diagnosticQuestions.caseId, id))
+        .then((r) => r[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(diagnosticResponses)
+        .where(eq(diagnosticResponses.caseId, id))
+        .then((r) => r[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(processSteps)
+        .where(eq(processSteps.caseId, id))
+        .then((r) => r[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(riskItems)
+        .where(eq(riskItems.caseId, id))
+        .then((r) => r[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(wasteItems)
+        .where(eq(wasteItems.caseId, id))
+        .then((r) => r[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(initiatives)
+        .where(eq(initiatives.caseId, id))
+        .then((r) => r[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(actionItems)
+        .where(eq(actionItems.caseId, id))
+        .then((r) => r[0]),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(weeklyMetrics)
+        .where(eq(weeklyMetrics.caseId, id))
+        .then((r) => r[0]),
+    ]);
 
     return {
       data: {
@@ -171,13 +192,15 @@ export async function getCase(id: string) {
 
 export async function getTemplates() {
   try {
-    const orgId = await getOrCreateDefaultOrg();
+    const ctx = await requireOrganizationContext();
+    if ("error" in ctx) return { error: ctx.error };
+
     const rows = await db
       .select()
       .from(cases)
       .where(
         and(
-          eq(cases.organizationId, orgId),
+          eq(cases.organizationId, ctx.organizationId),
           eq(cases.isTemplate, true),
           isNull(cases.deletedAt),
         ),
@@ -202,8 +225,30 @@ export async function createCase(data: z.input<typeof createCaseSchema>) {
   const parsed = createCaseSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
+  const ctx = await requireOrganizationContext();
+  if ("error" in ctx) return { error: ctx.error };
+  if (!canCreateCases(ctx.role)) {
+    return { error: "Tu rol no puede crear casos." };
+  }
+
   try {
-    const [row] = await db.insert(cases).values(parsed.data).returning();
+    const [row] = await db
+      .insert(cases)
+      .values({
+        ...parsed.data,
+        organizationId: ctx.organizationId,
+      })
+      .returning();
+
+    await logAuditEvent({
+      ctx,
+      caseId: row.id,
+      eventType: "case.create",
+      entityType: "case",
+      entityId: row.id,
+      newData: { name: row.name, isTemplate: row.isTemplate },
+    });
+
     revalidatePath("/dashboard/cases");
     revalidatePath("/dashboard");
     return { data: row };
@@ -213,17 +258,31 @@ export async function createCase(data: z.input<typeof createCaseSchema>) {
 }
 
 export async function createBlankCase(name: string) {
+  const ctx = await requireOrganizationContext();
+  if ("error" in ctx) return { error: ctx.error };
+  if (!canCreateCases(ctx.role)) {
+    return { error: "Tu rol no puede crear casos." };
+  }
+
   try {
-    const orgId = await getOrCreateDefaultOrg();
     const [row] = await db
       .insert(cases)
       .values({
         name,
-        organizationId: orgId,
+        organizationId: ctx.organizationId,
         isTemplate: false,
         status: "draft",
       })
       .returning();
+
+    await logAuditEvent({
+      ctx,
+      caseId: row.id,
+      eventType: "case.create_blank",
+      entityType: "case",
+      entityId: row.id,
+      newData: { name: row.name },
+    });
 
     revalidatePath("/dashboard/cases");
     revalidatePath("/dashboard");
@@ -237,9 +296,13 @@ export async function createCaseFromTemplate(
   templateId: string,
   name: string,
 ) {
-  try {
-    const orgId = await getOrCreateDefaultOrg();
+  const ctx = await requireOrganizationContext();
+  if ("error" in ctx) return { error: ctx.error };
+  if (!canCreateCases(ctx.role)) {
+    return { error: "Tu rol no puede crear casos." };
+  }
 
+  try {
     const [template] = await db
       .select()
       .from(cases)
@@ -247,6 +310,7 @@ export async function createCaseFromTemplate(
         and(
           eq(cases.id, templateId),
           eq(cases.isTemplate, true),
+          eq(cases.organizationId, ctx.organizationId),
           isNull(cases.deletedAt),
         ),
       );
@@ -254,12 +318,11 @@ export async function createCaseFromTemplate(
     if (!template) return { error: "Template no encontrado" };
 
     const result = await db.transaction(async (tx) => {
-      // 1. Create the new case
       const [newCase] = await tx
         .insert(cases)
         .values({
           name,
-          organizationId: orgId,
+          organizationId: ctx.organizationId,
           isTemplate: false,
           templateId,
           sector: template.sector,
@@ -273,7 +336,6 @@ export async function createCaseFromTemplate(
 
       const newCaseId = newCase.id;
 
-      // 2. Copy diagnostic questions
       const templateQuestions = await tx
         .select()
         .from(diagnosticQuestions)
@@ -292,7 +354,6 @@ export async function createCaseFromTemplate(
         );
       }
 
-      // 3. Copy process steps and build old->new ID map for risk items
       const templateSteps = await tx
         .select()
         .from(processSteps)
@@ -321,11 +382,10 @@ export async function createCaseFromTemplate(
           .returning();
 
         templateSteps.forEach((old, i) => {
-          stepIdMap.set(old.id, insertedSteps[i].id);
+          stepIdMap.set(old.id, insertedSteps[i]!.id);
         });
       }
 
-      // 4. Copy risk items
       const templateRisks = await tx
         .select()
         .from(riskItems)
@@ -350,7 +410,6 @@ export async function createCaseFromTemplate(
         );
       }
 
-      // 5. Copy waste items
       const templateWaste = await tx
         .select()
         .from(wasteItems)
@@ -373,7 +432,6 @@ export async function createCaseFromTemplate(
         );
       }
 
-      // 6. Copy initiatives and build old->new ID map for action items
       const templateInitiatives = await tx
         .select()
         .from(initiatives)
@@ -401,11 +459,10 @@ export async function createCaseFromTemplate(
           .returning();
 
         templateInitiatives.forEach((old, idx) => {
-          initiativeIdMap.set(old.id, insertedInitiatives[idx].id);
+          initiativeIdMap.set(old.id, insertedInitiatives[idx]!.id);
         });
       }
 
-      // 7. Copy action items
       const templateActions = await tx
         .select()
         .from(actionItems)
@@ -431,14 +488,13 @@ export async function createCaseFromTemplate(
         );
       }
 
-      // 8. Copy prioritization weights
       const templateWeights = await tx
         .select()
         .from(prioritizationWeights)
         .where(eq(prioritizationWeights.caseId, templateId));
 
       if (templateWeights.length > 0) {
-        const w = templateWeights[0];
+        const w = templateWeights[0]!;
         await tx.insert(prioritizationWeights).values({
           caseId: newCaseId,
           impactLeadTime: w.impactLeadTime,
@@ -451,6 +507,15 @@ export async function createCaseFromTemplate(
       }
 
       return newCase;
+    });
+
+    await logAuditEvent({
+      ctx,
+      caseId: result.id,
+      eventType: "case.create_from_template",
+      entityType: "case",
+      entityId: result.id,
+      newData: { name: result.name, templateId },
     });
 
     revalidatePath("/dashboard/cases");
@@ -468,9 +533,11 @@ export async function updateCase(
   const parsed = updateCaseSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
+  const gate = await requireWritableCase(id);
+  if ("error" in gate) return { error: gate.error };
+
   try {
     const values: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
-    // Remove undefined keys
     for (const key of Object.keys(values)) {
       if (values[key] === undefined) delete values[key];
     }
@@ -483,6 +550,15 @@ export async function updateCase(
 
     if (!row) return { error: "Caso no encontrado" };
 
+    await logAuditEvent({
+      ctx: gate.ctx,
+      caseId: id,
+      eventType: "case.update",
+      entityType: "case",
+      entityId: id,
+      newData: parsed.data,
+    });
+
     revalidatePath("/dashboard/cases");
     revalidatePath("/dashboard");
     revalidatePath(`/dashboard/cases/${id}`);
@@ -493,6 +569,13 @@ export async function updateCase(
 }
 
 export async function deleteCase(id: string) {
+  const gate = await requireWritableCase(id);
+  if ("error" in gate) return { error: gate.error };
+
+  if (!canDeleteCase(gate.ctx.role)) {
+    return { error: "Tu rol no puede eliminar casos." };
+  }
+
   try {
     const [row] = await db
       .update(cases)
@@ -501,6 +584,14 @@ export async function deleteCase(id: string) {
       .returning();
 
     if (!row) return { error: "Caso no encontrado" };
+
+    await logAuditEvent({
+      ctx: gate.ctx,
+      caseId: id,
+      eventType: "case.soft_delete",
+      entityType: "case",
+      entityId: id,
+    });
 
     revalidatePath("/dashboard/cases");
     revalidatePath("/dashboard");

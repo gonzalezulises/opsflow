@@ -323,6 +323,7 @@ export function ActionPlanTable({ caseId, initialActions }: ActionPlanTableProps
           {generating ? "Generando..." : "Generar plan con IA"}
         </Button>
         <AIPanel
+          caseId={caseId}
           module="Plan de acción"
           actions={[{ type: "action_plan_suggestions", label: "Revisar plan" }]}
           contextBuilder={buildContext}

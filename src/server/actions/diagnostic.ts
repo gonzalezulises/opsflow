@@ -8,6 +8,11 @@ import {
   diagnosticQuestions,
   diagnosticResponses,
 } from "@/server/db/schema";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
+import { isReadOnlyRole } from "@/server/auth/roles";
 
 // ---------------------------------------------------------------------------
 // Default diagnostic questions (auto-created if case has none)
@@ -59,14 +64,19 @@ const bulkResponseSchema = z.object({
 
 export async function getDiagnosticQuestions(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     let rows = await db
       .select()
       .from(diagnosticQuestions)
       .where(eq(diagnosticQuestions.caseId, caseId))
       .orderBy(asc(diagnosticQuestions.orderIndex));
 
-    // Auto-create default questions if the case has none
     if (rows.length === 0) {
+      if (isReadOnlyRole(gate.ctx.role)) {
+        return { data: [] };
+      }
       rows = await db
         .insert(diagnosticQuestions)
         .values(
@@ -88,6 +98,9 @@ export async function getDiagnosticQuestions(caseId: string) {
 
 export async function getDiagnosticResponses(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(diagnosticResponses)
@@ -110,6 +123,9 @@ export async function saveDiagnosticResponse(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const { caseId, questionId, score, comment } = parsed.data;
+
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
 
   try {
     const existing = await db
@@ -136,7 +152,7 @@ export async function saveDiagnosticResponse(
         .returning();
     }
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -150,6 +166,9 @@ export async function saveBulkDiagnosticResponses(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const { caseId, responses } = parsed.data;
+
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
 
   try {
     const results = await db.transaction(async (tx) => {
@@ -194,7 +213,7 @@ export async function saveBulkDiagnosticResponses(
       return saved;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: results };
   } catch (e) {
     return { error: (e as Error).message };

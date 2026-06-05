@@ -1,9 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { db } from "@/server/db";
 import { vsmScenarios, processSteps } from "@/server/db/schema";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+  assertScenarioInOrganization,
+} from "@/server/auth/guards";
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -11,6 +16,9 @@ import { vsmScenarios, processSteps } from "@/server/db/schema";
 
 export async function getScenarios(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(vsmScenarios)
@@ -25,6 +33,9 @@ export async function getScenarios(caseId: string) {
 
 export async function getScenarioSteps(scenarioId: string) {
   try {
+    const gate = await assertScenarioInOrganization(scenarioId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(processSteps)
@@ -32,6 +43,46 @@ export async function getScenarioSteps(scenarioId: string) {
       .orderBy(asc(processSteps.orderIndex));
 
     return { data: rows };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function getScenariosWithSteps(caseId: string) {
+  try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
+    const scenarioRows = await db
+      .select()
+      .from(vsmScenarios)
+      .where(eq(vsmScenarios.caseId, caseId))
+      .orderBy(asc(vsmScenarios.createdAt));
+
+    if (scenarioRows.length === 0) {
+      return { data: [] as { id: string; name: string; description: string | null; steps: (typeof processSteps.$inferSelect)[] }[] };
+    }
+
+    const scenarioIds = scenarioRows.map((s) => s.id);
+    const allSteps = await db
+      .select()
+      .from(processSteps)
+      .where(
+        and(
+          eq(processSteps.caseId, caseId),
+          inArray(processSteps.scenarioId, scenarioIds),
+        ),
+      )
+      .orderBy(asc(processSteps.orderIndex));
+
+    const data = scenarioRows.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      steps: allSteps.filter((st) => st.scenarioId === s.id),
+    }));
+
+    return { data };
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -50,6 +101,17 @@ export async function createScenario(
   description?: string,
   sourceScenarioId?: string,
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
+  if (sourceScenarioId) {
+    const src = await assertScenarioInOrganization(sourceScenarioId);
+    if ("error" in src) return { error: src.error };
+    if (src.caseId !== caseId) {
+      return { error: "El escenario fuente no pertenece a este caso." };
+    }
+  }
+
   try {
     // Create scenario record
     const [scenario] = await db
@@ -127,6 +189,12 @@ export async function createScenario(
 
 export async function deleteScenario(scenarioId: string) {
   try {
+    const gate = await assertScenarioInOrganization(scenarioId);
+    if ("error" in gate) return { error: gate.error };
+
+    const writeGate = await requireWritableCase(gate.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     // Delete steps first
     await db.delete(processSteps).where(eq(processSteps.scenarioId, scenarioId));
     // Delete scenario
@@ -156,6 +224,15 @@ export async function saveScenarioSteps(
     linkedInitiativeIds?: string[];
   }[],
 ) {
+  const scGate = await assertScenarioInOrganization(scenarioId);
+  if ("error" in scGate) return { error: scGate.error };
+  if (scGate.caseId !== caseId) {
+    return { error: "El escenario no coincide con el caso indicado." };
+  }
+
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const result = await db.transaction(async (tx) => {
       await tx.delete(processSteps).where(eq(processSteps.scenarioId, scenarioId));

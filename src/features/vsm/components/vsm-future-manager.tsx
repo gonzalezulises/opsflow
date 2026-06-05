@@ -197,7 +197,7 @@ export function VSMFutureManager({
 
           <TabsContent value="compare">
             {comparison && narrative ? (
-              <VSMComparisonView comparison={comparison} narrative={narrative} futureSteps={justifiedSteps} initiatives={initiatives} stepDiffs={diffs} warnings={warnings} />
+              <VSMComparisonView caseId={caseId} comparison={comparison} narrative={narrative} futureSteps={justifiedSteps} initiatives={initiatives} stepDiffs={diffs} warnings={warnings} />
             ) : (
               <p className="py-8 text-center text-muted-foreground">
                 Guarda cambios en el VSM futuro para ver la comparación.

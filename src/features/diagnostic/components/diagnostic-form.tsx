@@ -138,7 +138,7 @@ export function DiagnosticForm({
       })
       .join("\n");
 
-    const { data, error } = await getAIInsight("diagnostic_summary", context);
+    const { data, error } = await getAIInsight("diagnostic_summary", context, caseId);
     setAiLoading(false);
 
     if (error) {

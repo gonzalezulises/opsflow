@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { sql } from "drizzle-orm";
+import { guardAdminApiRoute } from "@/server/lib/admin-api-route";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = guardAdminApiRoute(request);
+  if (denied) return denied;
+
   try {
     // Check if vsm_state enum already exists
     const enumCheck = await db.execute(

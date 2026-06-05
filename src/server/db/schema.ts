@@ -111,6 +111,32 @@ export const users = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// 2b. organization_members (ADR-004 — membresía multi-org)
+// ---------------------------------------------------------------------------
+
+export const organizationMembers = pgTable(
+  "organization_members",
+  {
+    ...auditColumns,
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: userRoleEnum("role").notNull(),
+  },
+  (t) => [
+    uniqueIndex("organization_members_org_user_idx").on(
+      t.organizationId,
+      t.userId,
+    ),
+    index("organization_members_user_id_idx").on(t.userId),
+    index("organization_members_organization_id_idx").on(t.organizationId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // 3. cohorts
 // ---------------------------------------------------------------------------
 
@@ -160,6 +186,28 @@ export const cases = pgTable(
     index("cases_organization_id_idx").on(t.organizationId),
     index("cases_template_id_idx").on(t.templateId),
     index("cases_status_idx").on(t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// 4b. case_assignments (participant ↔ caso)
+// ---------------------------------------------------------------------------
+
+export const caseAssignments = pgTable(
+  "case_assignments",
+  {
+    ...auditColumns,
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    uniqueIndex("case_assignments_case_user_idx").on(t.caseId, t.userId),
+    index("case_assignments_user_id_idx").on(t.userId),
+    index("case_assignments_case_id_idx").on(t.caseId),
   ],
 );
 
@@ -550,6 +598,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   cohorts: many(cohorts),
   cases: many(cases),
   auditEvents: many(auditEvents),
+  organizationMembers: many(organizationMembers),
 }));
 
 // --- users ---
@@ -563,6 +612,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   diagnosticResponses: many(diagnosticResponses),
   aiInteractions: many(aiInteractions),
   auditEvents: many(auditEvents),
+  organizationMemberships: many(organizationMembers),
+  caseAssignments: many(caseAssignments),
 }));
 
 // --- cohorts ---
@@ -598,6 +649,36 @@ export const casesRelations = relations(cases, ({ one, many }) => ({
   aiInteractions: many(aiInteractions),
   auditEvents: many(auditEvents),
   prioritizationWeights: many(prioritizationWeights),
+  assignments: many(caseAssignments),
+}));
+
+// --- organization_members ---
+
+export const organizationMembersRelations = relations(
+  organizationMembers,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [organizationMembers.organizationId],
+      references: [organizations.id],
+    }),
+    user: one(users, {
+      fields: [organizationMembers.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+// --- case_assignments ---
+
+export const caseAssignmentsRelations = relations(caseAssignments, ({ one }) => ({
+  case: one(cases, {
+    fields: [caseAssignments.caseId],
+    references: [cases.id],
+  }),
+  user: one(users, {
+    fields: [caseAssignments.userId],
+    references: [users.id],
+  }),
 }));
 
 // --- teams ---

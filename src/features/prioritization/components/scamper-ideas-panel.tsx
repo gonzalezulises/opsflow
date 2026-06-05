@@ -36,11 +36,12 @@ export interface ScamperInitiativeData {
 }
 
 interface ScamperIdeasPanelProps {
+  caseId: string;
   scamperContext: string;
   onConvertToInitiative: (data: ScamperInitiativeData) => void;
 }
 
-export function ScamperIdeasPanel({ scamperContext, onConvertToInitiative }: ScamperIdeasPanelProps) {
+export function ScamperIdeasPanel({ caseId, scamperContext, onConvertToInitiative }: ScamperIdeasPanelProps) {
   const [ideas, setIdeas] = useState<RankedIdea[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -50,7 +51,7 @@ export function ScamperIdeasPanel({ scamperContext, onConvertToInitiative }: Sca
   async function handleGenerate() {
     setLoading(true);
     setOpen(true);
-    const { data, error } = await getAIInsight("scamper_ideas", scamperContext);
+    const { data, error } = await getAIInsight("scamper_ideas", scamperContext, caseId);
     setLoading(false);
     if (error) {
       toast.error(error);

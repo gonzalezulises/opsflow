@@ -6,6 +6,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { riskItems } from "@/server/db/schema";
 import { calculateExposure } from "@/lib/calculations";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -30,6 +34,9 @@ const riskItemSchema = z.object({
 
 export async function getRiskItems(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(riskItems)
@@ -52,6 +59,9 @@ export async function saveRiskItem(data: z.input<typeof riskItemSchema>) {
   const { id, ...values } = parsed.data;
   const exposure = String(calculateExposure(values.probability, values.impact));
 
+  const writeGate = await requireWritableCase(values.caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     let row;
     if (id) {
@@ -67,7 +77,7 @@ export async function saveRiskItem(data: z.input<typeof riskItemSchema>) {
         .returning();
     }
 
-    revalidatePath(`/cases/${values.caseId}`);
+    revalidatePath(`/dashboard/cases/${values.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -76,6 +86,16 @@ export async function saveRiskItem(data: z.input<typeof riskItemSchema>) {
 
 export async function deleteRiskItem(id: string) {
   try {
+    const [existing] = await db
+      .select({ caseId: riskItems.caseId })
+      .from(riskItems)
+      .where(eq(riskItems.id, id));
+
+    if (!existing) return { error: "Riesgo no encontrado" };
+
+    const writeGate = await requireWritableCase(existing.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     const [row] = await db
       .delete(riskItems)
       .where(eq(riskItems.id, id))
@@ -83,7 +103,7 @@ export async function deleteRiskItem(id: string) {
 
     if (!row) return { error: "Riesgo no encontrado" };
 
-    revalidatePath(`/cases/${row.caseId}`);
+    revalidatePath(`/dashboard/cases/${row.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -94,6 +114,9 @@ export async function saveAllRiskItems(
   caseId: string,
   items: z.input<typeof riskItemSchema>[],
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const result = await db.transaction(async (tx) => {
       await tx.delete(riskItems).where(eq(riskItems.caseId, caseId));
@@ -118,7 +141,7 @@ export async function saveAllRiskItems(
       return rows;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: result };
   } catch (e) {
     return { error: (e as Error).message };

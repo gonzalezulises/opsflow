@@ -3,7 +3,7 @@ import { ModulePage } from "@/components/shared/module-page";
 import { MODULE_GUIDES } from "@/lib/constants/guides";
 import { getProcessSteps, hasFutureVSM } from "@/server/actions/vsm";
 import { getInitiatives } from "@/server/actions/prioritization";
-import { getScenarios, getScenarioSteps } from "@/server/actions/scenarios";
+import { getScenariosWithSteps } from "@/server/actions/scenarios";
 
 export default async function VSMPage({
   params,
@@ -17,7 +17,7 @@ export default async function VSMPage({
     getProcessSteps(caseId, "future"),
     hasFutureVSM(caseId),
     getInitiatives(caseId),
-    getScenarios(caseId),
+    getScenariosWithSteps(caseId),
   ]);
 
   const currentSteps = currentResult.data ?? [];
@@ -29,18 +29,14 @@ export default async function VSMPage({
     classification: i.classification,
   }));
 
-  const rawScenarios = scenariosResult.data ?? [];
-  const scenarios = await Promise.all(
-    rawScenarios.map(async (s) => {
-      const stepsResult = await getScenarioSteps(s.id);
-      return {
+  const scenarios = scenariosResult.error
+    ? []
+    : (scenariosResult.data ?? []).map((s) => ({
         id: s.id,
         name: s.name,
         description: s.description,
-        steps: stepsResult.data ?? [],
-      };
-    }),
-  );
+        steps: s.steps,
+      }));
 
   return (
     <ModulePage guide={MODULE_GUIDES.vsm}>

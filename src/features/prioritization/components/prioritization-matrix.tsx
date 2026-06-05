@@ -341,6 +341,7 @@ export function PrioritizationMatrix({
 
       {scamperContext && (
         <ScamperIdeasPanel
+          caseId={caseId}
           scamperContext={scamperContext}
           onConvertToInitiative={addFromScamper}
         />
@@ -409,6 +410,7 @@ export function PrioritizationMatrix({
           {generating ? "Generando..." : "Generar iniciativas con IA"}
         </Button>
         <AIPanel
+          caseId={caseId}
           module="Priorización"
           actions={[{ type: "prioritization_review", label: "Revisar priorización" }]}
           contextBuilder={buildContext}

@@ -37,6 +37,9 @@ import { getWasteItems } from "@/server/actions/waste";
 import { getDiagnosticResponses } from "@/server/actions/diagnostic";
 import { getInitiatives } from "@/server/actions/prioritization";
 import { getCase } from "@/server/actions/cases";
+import { requireCaseInOrganization } from "@/server/auth/guards";
+import { getModel } from "@/server/ai/client";
+import { assertAiRateLimit, assertOrgAiVolumeLimit, recordAiInteraction } from "@/server/ai/rate-limit";
 
 export type AIActionType =
   | "diagnostic_summary"
@@ -71,10 +74,26 @@ const SCHEMA_MAP = {
 
 export async function getAIInsight(
   actionType: AIActionType,
-  context: string
+  context: string,
+  caseId: string,
 ): Promise<{ data: unknown; error: string | null }> {
   if (!process.env.OPENAI_API_KEY) {
     return { data: null, error: "API key de OpenAI no configurada" };
+  }
+
+  const gate = await requireCaseInOrganization(caseId);
+  if ("error" in gate) {
+    return { data: null, error: gate.error };
+  }
+
+  const limit = await assertAiRateLimit(gate.ctx.appUserId);
+  if (limit) {
+    return { data: null, error: limit.error };
+  }
+
+  const orgLimit = await assertOrgAiVolumeLimit(gate.ctx.organizationId);
+  if (orgLimit) {
+    return { data: null, error: orgLimit.error };
   }
 
   const config = SCHEMA_MAP[actionType];
@@ -84,6 +103,17 @@ export async function getAIInsight(
 
   const prompt = config.promptFn(context);
   const result = await generateStructured(prompt, config.schema, config.name);
+
+  if (!result.error && result.data != null) {
+    await recordAiInteraction({
+      appUserId: gate.ctx.appUserId,
+      caseId,
+      module: actionType,
+      actionType,
+      modelUsed: getModel(),
+      tokensUsed: result.tokensUsed,
+    });
+  }
 
   return { data: result.data, error: result.error };
 }
@@ -99,6 +129,21 @@ export async function generateFromAI(
 ): Promise<{ data: unknown; error: string | null }> {
   if (!process.env.OPENAI_API_KEY) {
     return { data: null, error: "API key de OpenAI no configurada" };
+  }
+
+  const gate = await requireCaseInOrganization(caseId);
+  if ("error" in gate) {
+    return { data: null, error: gate.error };
+  }
+
+  const limit = await assertAiRateLimit(gate.ctx.appUserId);
+  if (limit) {
+    return { data: null, error: limit.error };
+  }
+
+  const orgLimit = await assertOrgAiVolumeLimit(gate.ctx.organizationId);
+  if (orgLimit) {
+    return { data: null, error: orgLimit.error };
   }
 
   const caseResult = await getCase(caseId);
@@ -172,6 +217,17 @@ export async function generateFromAI(
   const config = SCHEMA_MAP[actionType];
   const prompt = config.promptFn(context);
   const result = await generateStructured(prompt, config.schema, config.name);
+
+  if (!result.error && result.data != null) {
+    await recordAiInteraction({
+      appUserId: gate.ctx.appUserId,
+      caseId,
+      module: actionType,
+      actionType,
+      modelUsed: getModel(),
+      tokensUsed: result.tokensUsed,
+    });
+  }
 
   return { data: result.data, error: result.error };
 }

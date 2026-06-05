@@ -5,6 +5,10 @@ import { z } from "zod";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { processSteps, processStepInitiatives, initiatives } from "@/server/db/schema";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,6 +43,9 @@ const processStepSchema = z.object({
 
 export async function getProcessSteps(caseId: string, state: VsmState = "current") {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(processSteps)
@@ -58,6 +65,9 @@ export async function getProcessSteps(caseId: string, state: VsmState = "current
 
 export async function hasFutureVSM(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select({ id: processSteps.id })
       .from(processSteps)
@@ -87,6 +97,9 @@ export async function saveProcessStep(
 
   const { id, ...values } = parsed.data;
 
+  const writeGate = await requireWritableCase(values.caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     let row;
     if (id) {
@@ -102,7 +115,7 @@ export async function saveProcessStep(
         .returning();
     }
 
-    revalidatePath(`/cases/${values.caseId}`);
+    revalidatePath(`/dashboard/cases/${values.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -114,6 +127,9 @@ export async function saveAllProcessSteps(
   steps: z.input<typeof processStepSchema>[],
   state: VsmState = "current",
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const result = await db.transaction(async (tx) => {
       // Delete existing steps for this case AND state only
@@ -199,6 +215,9 @@ export async function saveAllProcessSteps(
  * Returns the new future steps.
  */
 export async function cloneCurrentToFuture(caseId: string) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     // Check if future already exists
     const existing = await db
@@ -263,6 +282,9 @@ export async function cloneCurrentToFuture(caseId: string) {
  * Delete the entire future VSM for a case.
  */
 export async function deleteFutureVSM(caseId: string) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     await db
       .delete(processSteps)
@@ -282,6 +304,16 @@ export async function deleteFutureVSM(caseId: string) {
 
 export async function deleteProcessStep(id: string) {
   try {
+    const [existing] = await db
+      .select({ caseId: processSteps.caseId })
+      .from(processSteps)
+      .where(eq(processSteps.id, id));
+
+    if (!existing) return { error: "Paso no encontrado" };
+
+    const writeGate = await requireWritableCase(existing.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     const [row] = await db
       .delete(processSteps)
       .where(eq(processSteps.id, id))
@@ -300,6 +332,9 @@ export async function reorderProcessSteps(
   caseId: string,
   orderedIds: string[],
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     await db.transaction(async (tx) => {
       for (let i = 0; i < orderedIds.length; i++) {

@@ -17,6 +17,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/server/db/seeds/index.ts",
+    "db:backfill-memberships": "tsx scripts/backfill-organization-memberships.ts",
     "prepare": "husky"
   },
   "lint-staged": {

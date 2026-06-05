@@ -298,6 +298,7 @@ export function RiskMatrix({ caseId, initialRisks }: { caseId: string; initialRi
           {generating ? "Generando..." : "Generar riesgos con IA"}
         </Button>
         <AIPanel
+          caseId={caseId}
           module="Riesgos"
           actions={[{ type: "risk_recommendations", label: "Analizar riesgos" }]}
           contextBuilder={buildContext}

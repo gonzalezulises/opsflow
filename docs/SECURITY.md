@@ -20,17 +20,28 @@
 | `participant` | Edición de datos en casos asignados. |
 | `observer` | Solo lectura. |
 
-### Implementación
+### Implementación (estado actual)
 
-- El rol se almacena en `organization_members.role`, no en el JWT.
-- Cada Server Action verifica el rol del usuario antes de ejecutar.
-- La verificación es server-side; el cliente solo recibe la UI filtrada por rol.
+- El rol se almacena en la tabla `users.role` (columna `organization_id` en la misma fila).
+- El middleware de Next.js exige sesión Supabase para rutas bajo `/dashboard` (y el resto de rutas no públicas).
+- Las Server Actions resuelven el usuario de aplicación por **email** (coincidente con Supabase Auth) y aplican:
+  - aislamiento por `organization_id` del caso,
+  - bloqueo de mutaciones para rol `observer` (`src/server/auth/guards.ts`).
+- El primer acceso de un correo nuevo crea automáticamente un usuario `facilitator` en la organización demo por defecto (bootstrap de bootcamp).
+
+> **Nota:** La tabla `organization_members` del ADR-004 aún no está en el esquema Drizzle; la membresía efectiva hoy es `users.organization_id`.
 
 ## Row Level Security (RLS)
 
-- **Todas** las tablas con datos de negocio tienen RLS habilitado.
-- Las políticas filtran por `organization_id` basándose en la membresía del usuario.
-- RLS actúa como defensa en profundidad: incluso si el código de aplicación tiene un bug, la base de datos bloquea el acceso cruzado.
+- Con la conexión actual de **Drizzle** vía `DATABASE_URL` (rol de servicio), las políticas RLS de Supabase **no sustituyen** la autorización en aplicación.
+- **Defensa principal:** guards en Server Actions + autenticación obligatoria.
+- Ver `docs/sql/README.md` para orientación si se habilita RLS efectiva en el futuro.
+
+## Rutas administrativas HTTP
+
+| Ruta | Protección |
+|------|------------|
+| `GET /api/migrate`, `GET /api/seed` | En **producción**, deshabilitadas (404) salvo que exista `OPSFLOW_ADMIN_API_SECRET` y la petición envíe la cabecera `x-opsflow-admin-secret` con el mismo valor. En desarrollo, abiertas si el secreto no está definido. |
 
 ## Secretos server-side
 
@@ -55,23 +66,22 @@ Reglas:
 
 ## Rate limiting en endpoints de IA
 
+**Implementado:** conteo por usuario en tabla `ai_interactions` (última hora, máx. 40 solicitudes) en `src/server/ai/rate-limit.ts`, aplicado en `getAIInsight` y `generateFromAI`.
+
 | Scope | Límite | Implementación |
 |-------|--------|----------------|
 | Por usuario | 10 req/min | Contador en DB con ventana deslizante |
 | Por organización | 100 req/hora | Contador en DB con ventana deslizante |
 | Global | Circuit breaker | Se desactiva IA si error rate > 50% en últimos 5 min |
 
-Si se excede el límite, se retorna HTTP 429 con `Retry-After` header.
+> Las filas de la tabla anterior describen un **objetivo** ampliado; el límite activo hoy es el del párrafo inicial.
 
 ## Audit logging
 
-Se registran en la tabla `audit_log`:
-- Creación, modificación y eliminación de registros críticos.
-- Invocaciones de IA (con hash de input/output, no contenido completo).
-- Cambios de roles y membresías.
-- Intentos de acceso denegado.
+- **Casos:** creación, actualización y borrado lógico se registran en **`audit_events`** (`logAuditEvent` desde `src/server/auth/audit.ts`).
+- **IA:** cada generación exitosa inserta una fila en **`ai_interactions`** (modelo, tokens, módulo).
 
-Campos: `id`, `user_id`, `organization_id`, `action`, `entity_type`, `entity_id`, `metadata`, `ip_address`, `created_at`.
+> Ampliaciones futuras (hash de contenido, `audit_log` genérico, IP) pueden alinearse con la tabla descrita en versiones anteriores de este documento.
 
 ## Protección contra prompt injection
 

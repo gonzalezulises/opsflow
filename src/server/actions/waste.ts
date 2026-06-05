@@ -6,6 +6,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { wasteItems } from "@/server/db/schema";
 import { calculateWasteCost } from "@/lib/calculations";
+import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -53,6 +57,9 @@ function computeCosts(data: z.output<typeof wasteItemSchema>) {
 
 export async function getWasteItems(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(wasteItems)
@@ -72,8 +79,11 @@ export async function saveWasteItem(data: z.input<typeof wasteItemSchema>) {
   const parsed = wasteItemSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const { id, caseId, problemDescription, ...rest } = parsed.data;
+  const { id, caseId, problemDescription } = parsed.data;
   const computed = computeCosts(parsed.data);
+
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
 
   try {
     let row;
@@ -98,7 +108,7 @@ export async function saveWasteItem(data: z.input<typeof wasteItemSchema>) {
         .returning();
     }
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -107,6 +117,16 @@ export async function saveWasteItem(data: z.input<typeof wasteItemSchema>) {
 
 export async function deleteWasteItem(id: string) {
   try {
+    const [existing] = await db
+      .select({ caseId: wasteItems.caseId })
+      .from(wasteItems)
+      .where(eq(wasteItems.id, id));
+
+    if (!existing) return { error: "Desperdicio no encontrado" };
+
+    const writeGate = await requireWritableCase(existing.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     const [row] = await db
       .delete(wasteItems)
       .where(eq(wasteItems.id, id))
@@ -114,7 +134,7 @@ export async function deleteWasteItem(id: string) {
 
     if (!row) return { error: "Desperdicio no encontrado" };
 
-    revalidatePath(`/cases/${row.caseId}`);
+    revalidatePath(`/dashboard/cases/${row.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -125,6 +145,9 @@ export async function saveAllWasteItems(
   caseId: string,
   items: z.input<typeof wasteItemSchema>[],
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const result = await db.transaction(async (tx) => {
       await tx.delete(wasteItems).where(eq(wasteItems.caseId, caseId));
@@ -150,7 +173,7 @@ export async function saveAllWasteItems(
       return rows;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: result };
   } catch (e) {
     return { error: (e as Error).message };

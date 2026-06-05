@@ -6,6 +6,10 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db";
 import { initiatives, prioritizationWeights, processStepInitiatives } from "@/server/db/schema";
 import {
+  requireCaseInOrganization,
+  requireWritableCase,
+} from "@/server/auth/guards";
+import {
   calculatePrioritizationScore,
   DEFAULT_WEIGHTS,
   type PrioritizationWeights,
@@ -66,6 +70,9 @@ async function getWeightsForCase(caseId: string): Promise<PrioritizationWeights>
 
 export async function getInitiatives(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const rows = await db
       .select()
       .from(initiatives)
@@ -79,6 +86,9 @@ export async function getInitiatives(caseId: string) {
 
 export async function getPrioritizationWeights(caseId: string) {
   try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
     const weights = await getWeightsForCase(caseId);
     return { data: weights };
   } catch (e) {
@@ -98,6 +108,10 @@ export async function saveInitiative(
 
   const { id, caseId, name, description, ...scores } = parsed.data;
   const weights = await getWeightsForCase(caseId);
+
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   const { totalScore, classification } = calculatePrioritizationScore(
     scores,
     weights,
@@ -132,7 +146,7 @@ export async function saveInitiative(
         .returning();
     }
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -141,6 +155,16 @@ export async function saveInitiative(
 
 export async function deleteInitiative(id: string) {
   try {
+    const [existing] = await db
+      .select({ caseId: initiatives.caseId })
+      .from(initiatives)
+      .where(eq(initiatives.id, id));
+
+    if (!existing) return { error: "Iniciativa no encontrada" };
+
+    const writeGate = await requireWritableCase(existing.caseId);
+    if ("error" in writeGate) return { error: writeGate.error };
+
     const [row] = await db
       .delete(initiatives)
       .where(eq(initiatives.id, id))
@@ -148,7 +172,7 @@ export async function deleteInitiative(id: string) {
 
     if (!row) return { error: "Iniciativa no encontrada" };
 
-    revalidatePath(`/cases/${row.caseId}`);
+    revalidatePath(`/dashboard/cases/${row.caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -171,6 +195,9 @@ export async function savePrioritizationWeights(
     externalDependency: String(parsed.data.externalDependency),
   };
 
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const existing = await db
       .select()
@@ -191,7 +218,7 @@ export async function savePrioritizationWeights(
         .returning();
     }
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: row };
   } catch (e) {
     return { error: (e as Error).message };
@@ -202,6 +229,9 @@ export async function saveAllInitiatives(
   caseId: string,
   items: z.input<typeof initiativeSchema>[],
 ) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const weights = await getWeightsForCase(caseId);
 
@@ -253,7 +283,7 @@ export async function saveAllInitiatives(
       return rows;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: result };
   } catch (e) {
     return { error: (e as Error).message };
@@ -261,6 +291,9 @@ export async function saveAllInitiatives(
 }
 
 export async function recalculateAllScores(caseId: string) {
+  const writeGate = await requireWritableCase(caseId);
+  if ("error" in writeGate) return { error: writeGate.error };
+
   try {
     const weights = await getWeightsForCase(caseId);
 
@@ -301,7 +334,7 @@ export async function recalculateAllScores(caseId: string) {
       return results;
     });
 
-    revalidatePath(`/cases/${caseId}`);
+    revalidatePath(`/dashboard/cases/${caseId}`);
     return { data: updated };
   } catch (e) {
     return { error: (e as Error).message };
