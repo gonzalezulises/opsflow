@@ -22,14 +22,13 @@
 
 ### Implementación (estado actual)
 
-- El rol se almacena en la tabla `users.role` (columna `organization_id` en la misma fila).
-- El middleware de Next.js exige sesión Supabase para rutas bajo `/dashboard` (y el resto de rutas no públicas).
-- Las Server Actions resuelven el usuario de aplicación por **email** (coincidente con Supabase Auth) y aplican:
-  - aislamiento por `organization_id` del caso,
-  - bloqueo de mutaciones para rol `observer` (`src/server/auth/guards.ts`).
-- El primer acceso de un correo nuevo crea automáticamente un usuario `facilitator` en la organización demo por defecto (bootstrap de bootcamp).
+- El rol **por organización** se toma de `organization_members.role`; la cookie httpOnly `opsflow-active-org-id` elige el tenant activo si el usuario tiene varias membresías.
+- El middleware de Next.js exige sesión Supabase para rutas no públicas.
+- Las Server Actions resuelven el usuario de aplicación por **email** y aplican guards (`requireCaseInOrganization`, etc.).
+- **Modo bootcamp (default):** el primer acceso crea usuario `facilitator` en la organización demo.
+- **Modo producción:** con `OPSFLOW_STRICT_TENANCY=true`, los nuevos usuarios quedan sin tenant hasta **aceptar una invitación** (`organization_invites`) o hasta que un **admin de plataforma** (`OPSFLOW_PLATFORM_ADMIN_EMAILS`) cree una organización en `/organization/new`.
 
-> **Nota:** La tabla `organization_members` del ADR-004 aún no está en el esquema Drizzle; la membresía efectiva hoy es `users.organization_id`.
+Ver **`docs/MULTI_TENANT.md`** para variables y flujos.
 
 ## Row Level Security (RLS)
 

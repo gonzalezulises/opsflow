@@ -32,7 +32,8 @@ import { DEFAULT_TEMPLATE_ID } from "@/server/auth/constants";
 
 const createCaseSchema = z.object({
   name: z.string().min(1, "El nombre es requerido"),
-  organizationId: z.string().uuid(),
+  /** Ignored server-side; tenant always comes from the authenticated session. */
+  organizationId: z.string().uuid().optional(),
   isTemplate: z.boolean().optional(),
   sector: z.string().optional(),
   companyName: z.string().optional(),

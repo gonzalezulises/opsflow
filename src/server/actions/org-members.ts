@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import {
   users,
@@ -73,6 +73,28 @@ export async function listMyOrganizations() {
     }
 
     return { data: out };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+export async function listCaseAssignees(caseId: string) {
+  try {
+    const gate = await requireCaseInOrganization(caseId);
+    if ("error" in gate) return { error: gate.error };
+
+    const rows = await db
+      .select({
+        userId: users.id,
+        email: users.email,
+        fullName: users.fullName,
+      })
+      .from(caseAssignments)
+      .innerJoin(users, eq(users.id, caseAssignments.userId))
+      .where(eq(caseAssignments.caseId, caseId))
+      .orderBy(asc(users.email));
+
+    return { data: rows };
   } catch (e) {
     return { error: (e as Error).message };
   }

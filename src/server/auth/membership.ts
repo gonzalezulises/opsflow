@@ -6,10 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/server/db";
 import { users, organizationMembers } from "@/server/db/schema";
 import { getOrCreateDefaultOrg } from "@/server/db/org";
-import type { OrganizationContext } from "./types";
+import type { MembershipAuthError, OrganizationContext } from "./types";
 import { ACTIVE_ORG_COOKIE } from "./constants";
+import { isStrictTenancy } from "./platform";
 
-type AuthError = { error: string };
+type AuthError = MembershipAuthError;
 
 async function syncLegacyMembershipRow(
   userId: string,
@@ -46,9 +47,20 @@ async function loadMemberships(userId: string) {
     .where(eq(organizationMembers.userId, userId));
 }
 
+function noMembershipError(): AuthError {
+  return {
+    error:
+      "Tu cuenta no tiene una organización activa. Acepta una invitación o pide acceso a un administrador.",
+    code: "NO_MEMBERSHIP",
+  };
+}
+
 /**
  * Resolves Supabase session → app user + active organization membership.
  * Role and organizationId come from `organization_members` (ADR-004).
+ *
+ * With `OPSFLOW_STRICT_TENANCY=true`, new users are not auto-attached to the
+ * demo org; they must accept an invite first.
  */
 export async function requireMembershipContext(): Promise<
   OrganizationContext | AuthError
@@ -74,12 +86,23 @@ export async function requireMembershipContext(): Promise<
   let row = existing;
 
   if (!row) {
-    const orgId = await getOrCreateDefaultOrg();
     const displayName =
       (typeof user.user_metadata?.full_name === "string" &&
         user.user_metadata.full_name.trim()) ||
       email.split("@")[0] ||
       "Usuario";
+
+    if (isStrictTenancy()) {
+      await db.insert(users).values({
+        email,
+        fullName: displayName,
+        role: "participant",
+        organizationId: null,
+      });
+      return noMembershipError();
+    }
+
+    const orgId = await getOrCreateDefaultOrg();
 
     const [created] = await db
       .insert(users)
@@ -105,10 +128,7 @@ export async function requireMembershipContext(): Promise<
   }
 
   if (memberships.length === 0) {
-    return {
-      error:
-        "Tu cuenta no tiene organización asignada. Contacta al administrador.",
-    };
+    return noMembershipError();
   }
 
   const cookieStore = await cookies();
@@ -144,9 +164,11 @@ export async function setActiveOrganization(
   }
 
   const jar = await cookies();
+  const isProd = process.env.NODE_ENV === "production";
   jar.set(ACTIVE_ORG_COOKIE, organizationId, {
     httpOnly: true,
     sameSite: "lax",
+    secure: isProd,
     path: "/",
     maxAge: 60 * 60 * 24 * 400,
   });

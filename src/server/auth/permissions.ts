@@ -19,3 +19,23 @@ export function canManageCaseAssignments(role: AppUserRole): boolean {
     role === "super_admin" || role === "admin" || role === "facilitator"
   );
 }
+
+export function canInviteToOrganization(role: AppUserRole): boolean {
+  if (isReadOnlyRole(role)) return false;
+  return (
+    role === "super_admin" || role === "admin" || role === "facilitator"
+  );
+}
+
+const ORG_INVITE_ROLES = [
+  "admin",
+  "facilitator",
+  "participant",
+  "observer",
+] as const satisfies readonly AppUserRole[];
+
+export function isValidInviteRole(
+  role: string,
+): role is (typeof ORG_INVITE_ROLES)[number] {
+  return (ORG_INVITE_ROLES as readonly string[]).includes(role);
+}

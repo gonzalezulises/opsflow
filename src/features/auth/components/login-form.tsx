@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,7 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
-export function LoginForm() {
+function LoginFormInner() {
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/dashboard";
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -25,10 +29,13 @@ export function LoginForm() {
     setError(null);
 
     const supabase = createClient();
+    const callback = new URL(`${window.location.origin}/auth/callback`);
+    callback.searchParams.set("next", next);
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callback.toString(),
       },
     });
 
@@ -91,5 +98,21 @@ export function LoginForm() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+export function LoginForm() {
+  return (
+    <Suspense
+      fallback={
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            Cargando…
+          </CardContent>
+        </Card>
+      }
+    >
+      <LoginFormInner />
+    </Suspense>
   );
 }

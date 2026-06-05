@@ -4,8 +4,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { createClient } from "@/lib/supabase/server";
+import { isPlatformAdminEmail } from "@/server/auth/platform";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const email = user?.email?.toLowerCase() ?? "";
+  const showPlatform = email && isPlatformAdminEmail(email);
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -29,6 +38,23 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {showPlatform ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Multi-tenant (plataforma)</CardTitle>
+            <CardDescription>
+              Crear una organización nueva (tenant) para un cliente o unidad de
+              negocio
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button render={<Link href="/organization/new" />}>
+              Nueva organización
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>

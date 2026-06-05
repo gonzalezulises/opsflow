@@ -137,6 +137,33 @@ export const organizationMembers = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// 2c. organization_invites (multi-tenant production onboarding)
+// ---------------------------------------------------------------------------
+
+export const organizationInvites = pgTable(
+  "organization_invites",
+  {
+    ...auditColumns,
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: userRoleEnum("role").notNull().default("participant"),
+    token: text("token").notNull(),
+    invitedByUserId: uuid("invited_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("organization_invites_token_idx").on(t.token),
+    index("organization_invites_org_email_idx").on(t.organizationId, t.email),
+    index("organization_invites_expires_at_idx").on(t.expiresAt),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // 3. cohorts
 // ---------------------------------------------------------------------------
 
@@ -599,6 +626,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   cases: many(cases),
   auditEvents: many(auditEvents),
   organizationMembers: many(organizationMembers),
+  organizationInvites: many(organizationInvites),
 }));
 
 // --- users ---
@@ -663,6 +691,22 @@ export const organizationMembersRelations = relations(
     }),
     user: one(users, {
       fields: [organizationMembers.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+// --- organization_invites ---
+
+export const organizationInvitesRelations = relations(
+  organizationInvites,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [organizationInvites.organizationId],
+      references: [organizations.id],
+    }),
+    invitedBy: one(users, {
+      fields: [organizationInvites.invitedByUserId],
       references: [users.id],
     }),
   }),

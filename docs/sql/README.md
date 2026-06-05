@@ -17,3 +17,4 @@ Este directorio puede alojar migraciones SQL manuales (`*.sql`) coordinadas con 
 de base de datos; no sustituyen a `drizzle-kit` para el esquema Drizzle.
 
 - `002_organization_members.sql` — tablas `organization_members` y `case_assignments` + backfill desde `users` (idempotente).
+- `003_organization_invites.sql` — tabla `organization_invites` para onboarding multi-tenant.

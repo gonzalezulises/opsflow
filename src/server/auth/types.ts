@@ -8,3 +8,11 @@ export type OrganizationContext = {
   email: string;
   role: AppUserRole;
 };
+
+/** Returned by requireMembershipContext when the user cannot resolve a tenant. */
+export type MembershipErrorCode = "NO_MEMBERSHIP";
+
+export type MembershipAuthError = {
+  error: string;
+  code?: MembershipErrorCode;
+};
