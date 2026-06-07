@@ -24,6 +24,7 @@ El CI normal (`.github/workflows/ci.yml`) **no** ejecuta `db:push` ni necesita e
 
 ### Si el job falla en “Pulling schema”
 
+- Si el paso **Verify Postgres connection** muestra `ENETUNREACH` con una IP **IPv6** (`2600:...`), el runner de GitHub no llega por IPv6. El workflow ya define `NODE_OPTIONS=--dns-result-order=ipv4first` para preferir IPv4; si aun así falla, en Supabase probad la cadena **Session pooler** (5432) como `DATABASE_URL_DIRECT`.
 - Asegura que la URI lleve **`?sslmode=require`** (o equivalente) si Supabase lo exige desde IPs de GitHub Actions.
 - En **Supabase → Database → Network restrictions**: si tenéis allowlist de IP, hay que permitir los rangos de **GitHub-hosted runners** o usar **Session pooler** (5432) como alternativa a *Direct* desde redes IPv4, según indique el panel de Supabase.
 - Si sigue el error `checkValue.replace` con introspection, seguid usando **`docs/sql/*.sql`** hasta que Drizzle lo corrija; el workflow no sustituye ese caso extremo.
