@@ -27,11 +27,17 @@ const sql = postgres(url, { max: 1, ssl: "require", connect_timeout: 20 });
     await sql`select 1 as ok`;
     console.log(JSON.stringify({ connectionTest: "ok" }));
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const hint =
+      /2600:/.test(msg) || /ENETUNREACH/.test(msg)
+        ? "Desde GitHub Actions suele fallar la conexión Direct si el DNS solo devuelve IPv6. En Supabase → Connect → Session pooler (puerto 5432), copia esa URI y úsala como DATABASE_URL_DIRECT en el secreto del repo."
+        : undefined;
     console.error(
       JSON.stringify({
         connectionTest: "failed",
-        message: e instanceof Error ? e.message : String(e),
+        message: msg,
         code: e && typeof e === "object" && "code" in e ? e.code : undefined,
+        hint,
       }),
     );
     process.exit(1);

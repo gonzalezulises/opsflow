@@ -12,7 +12,7 @@
 
 ### GitHub Actions — secreto solo para `db:push`
 
-1. Supabase → **Project Settings → Database** → copia la URI **directa** (host `db.<ref>.supabase.co`, puerto **5432**, no *Transaction pooler* 6543).
+1. Supabase → **Project Settings → Database** (o **Connect** en el header) → elige **Session pooler** (puerto **5432**), no *Transaction pooler* (6543). Para **GitHub Actions** suele ser más fiable que **Direct** porque el runner a menudo **no tiene ruta IPv6** hacia el host “directo” de Supabase (error `ENETUNREACH` a `2600:…`). La app en **Vercel** puede seguir usando **Transaction pooler** en `DATABASE_URL`.
 2. Repo GitHub → **Settings → Secrets and variables → Actions → New repository secret**
    - Nombre: **`DATABASE_URL_DIRECT`**
    - Valor: la URI completa `postgresql://postgres.[ref]:[PASSWORD]@aws-0-....pooler.supabase.com:5432/postgres` o la cadena **Session/Direct** que muestre el panel (debe ser **5432**).
@@ -24,7 +24,7 @@ El CI normal (`.github/workflows/ci.yml`) **no** ejecuta `db:push` ni necesita e
 
 ### Si el job falla en “Pulling schema”
 
-- Si el paso **Verify Postgres connection** muestra `ENETUNREACH` con una IP **IPv6** (`2600:...`), el runner de GitHub no llega por IPv6. El workflow ya define `NODE_OPTIONS=--dns-result-order=ipv4first` para preferir IPv4; si aun así falla, en Supabase probad la cadena **Session pooler** (5432) como `DATABASE_URL_DIRECT`.
+- Si el paso **Verify Postgres connection** muestra `ENETUNREACH` con una IP **IPv6** (`2600:...`), el runner de GitHub no llega por IPv6. El workflow define `NODE_OPTIONS=--dns-result-order=ipv4first`, pero si el hostname solo tiene IPv6, **sustituye el secreto `DATABASE_URL_DIRECT` por la URI de Session pooler (5432)** de Supabase (Connect → Session pooler). La app en Vercel puede seguir con Transaction pooler (6543) en `DATABASE_URL`.
 - Asegura que la URI lleve **`?sslmode=require`** (o equivalente) si Supabase lo exige desde IPs de GitHub Actions.
 - En **Supabase → Database → Network restrictions**: si tenéis allowlist de IP, hay que permitir los rangos de **GitHub-hosted runners** o usar **Session pooler** (5432) como alternativa a *Direct* desde redes IPv4, según indique el panel de Supabase.
 - Si sigue el error `checkValue.replace` con introspection, seguid usando **`docs/sql/*.sql`** hasta que Drizzle lo corrija; el workflow no sustituye ese caso extremo.
