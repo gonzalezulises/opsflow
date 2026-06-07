@@ -1,0 +1,41 @@
+# Ejecuta `drizzle-kit push` contra Postgres usando conexión directa (puerto 5432).
+# No uses el pooler de transacciones (6543) aquí: ver docs/DATABASE.md
+#
+# Configuración: GitHub → Settings → Secrets and variables → Actions
+#   - DATABASE_URL_DIRECT  (obligatorio para este job) — URL postgresql://...@...:5432/...
+# Opcional si también quieres fallback en el mismo job:
+#   - DATABASE_URL         — solo si no defines DIRECT y tu URL ya es :5432
+#
+# Disparo: Actions → "Drizzle DB push" → Run workflow → confirmar con el texto indicado.
+
+name: Drizzle DB push
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribe exactamente: push'
+        required: true
+        type: string
+
+jobs:
+  db-push:
+    name: drizzle-kit push
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: drizzle-kit push
+        run: npm run db:push
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
