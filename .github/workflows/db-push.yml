@@ -34,7 +34,7 @@ jobs:
       - run: npm ci
 
       - name: drizzle-kit push
-        run: npm run db:push
+        run: npx drizzle-kit push --verbose
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
