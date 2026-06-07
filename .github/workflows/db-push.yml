@@ -33,6 +33,13 @@ jobs:
 
       - run: npm ci
 
+      - name: Verify Postgres connection
+        run: node scripts/verify-db-connection.cjs
+        env:
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
       - name: drizzle-kit push
         run: npx drizzle-kit push --verbose
         env:
