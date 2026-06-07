@@ -8,7 +8,7 @@
   `drizzle-kit push` (`checkValue.replace` sobre `undefined`). Usa conexión **directa o session**
   (puerto **5432**) para migraciones/push.
 - En **Vercel** (runtime de la app): suele bastar con **`DATABASE_URL`** al pooler **6543** (o el que use Supabase). **No** hace falta definir `DATABASE_URL_DIRECT` en Vercel salvo que el *build* o un script de deploy ejecute `npm run db:push` ahí (poco habitual).
-- En **GitHub Actions**: el workflow **Drizzle DB push** (`.github/workflows/db-push.yml`) solo inyecta secretos en el job de `db:push`, no en el resto de CI.
+- En **GitHub Actions**: el workflow **Drizzle DB push** (`.github/workflows/db-push.yml`) solo inyecta secretos en el job de `db:push`, no en el resto de CI. Antes de `drizzle-kit push` ejecuta **`scripts/verify-db-connection.cjs`** para dejar en el log un JSON claro si falla TLS o la red.
 
 ### GitHub Actions — secreto solo para `db:push`
 
