@@ -22,6 +22,15 @@ Si preferís el nombre `DIRECT_URL`, podéis crear ese secreto en su lugar; `dri
 
 El CI normal (`.github/workflows/ci.yml`) **no** ejecuta `db:push` ni necesita estos secretos.
 
+### Error `28P01 password authentication failed for user "postgres"`
+
+Es el fallo más confuso: **parece** contraseña incorrecta, pero casi siempre es el **usuario mal formado**. El pooler de Supabase (Supavisor) exige que el usuario sea `postgres.<project-ref>`, no `postgres` a secas.
+
+- Si el secreto apunta al **pooler** (`...pooler.supabase.com`) con usuario `postgres` (sin el `.ref`), Supavisor responde `28P01` aunque la contraseña sea correcta. El mensaje dice `user "postgres"`, lo que confirma que falta el ref.
+- Como `28P01` es rechazo de autenticación (no de red), GitHub **sí** llegó al servidor: el problema está en la URI, no en la conectividad.
+- **Fix:** copia la URI verbatim desde Supabase → Connect → **Session pooler** (ya trae el usuario `postgres.<project-ref>`) y pégala en el secreto sin editarla a mano. El paso `Verify Postgres connection` ahora detecta este caso y lo marca en el log como `error: "pooler_user_missing_ref"` antes incluso de intentar conectar.
+- Solo si el usuario **ya** lleva el ref y aun así da `28P01`, entonces sí revisa la contraseña en Supabase → Project Settings → Database.
+
 ### Si el job falla en “Pulling schema”
 
 - Si el paso **Verify Postgres connection** muestra `ENETUNREACH` con una IP **IPv6** (`2600:...`), el runner de GitHub no llega por IPv6. El workflow define `NODE_OPTIONS=--dns-result-order=ipv4first`, pero si el hostname solo tiene IPv6, **sustituye el secreto `DATABASE_URL_DIRECT` por la URI de Session pooler (5432)** de Supabase (Connect → Session pooler). La app en Vercel puede seguir con Transaction pooler (6543) en `DATABASE_URL`.
