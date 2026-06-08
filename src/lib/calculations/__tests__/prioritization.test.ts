@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   calculatePrioritizationScore,
   getClassificationColor,
-  DEFAULT_WEIGHTS,
 } from "@/lib/calculations/prioritization";
 
 describe("calculatePrioritizationScore", () => {
