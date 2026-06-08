@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
@@ -81,24 +80,6 @@ const STATUS_OPTIONS: { value: ActionStatus; label: string }[] = [
   { value: "blocked", label: "Bloqueada" },
   { value: "cancelled", label: "Cancelada" },
 ];
-
-function statusBadge(status: ActionStatus) {
-  const variants: Record<ActionStatus, "secondary" | "default" | "outline" | "destructive"> = {
-    pending: "secondary",
-    in_progress: "default",
-    completed: "outline",
-    blocked: "destructive",
-    cancelled: "secondary",
-  };
-  const labels: Record<ActionStatus, string> = {
-    pending: "Pendiente",
-    in_progress: "En progreso",
-    completed: "Completada",
-    blocked: "Bloqueada",
-    cancelled: "Cancelada",
-  };
-  return <Badge variant={variants[status]}>{labels[status]}</Badge>;
-}
 
 interface ActionPlanTableProps {
   caseId: string;
