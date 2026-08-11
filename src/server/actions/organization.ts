@@ -21,6 +21,7 @@ import {
   isValidInviteRole,
 } from "@/server/auth/permissions";
 import { ACTIVE_ORG_COOKIE } from "@/server/auth/constants";
+import { sendOrganizationInviteEmail } from "@/server/email/send-organization-invite";
 
 const RESERVED_SLUGS = new Set([
   "api",
@@ -50,6 +51,14 @@ const createOrgSchema = z.object({
 function inviteToken(): string {
   return randomBytes(32).toString("hex");
 }
+
+const INVITE_ROLE_LABEL: Record<string, string> = {
+  admin: "Administrador",
+  facilitator: "Facilitador",
+  participant: "Participante",
+  observer: "Observador",
+  super_admin: "Super administrador",
+};
 
 async function ensureAppUserForPlatformAdmin(email: string, fullNameHint: string) {
   const [existing] = await db
@@ -276,11 +285,40 @@ export async function createOrganizationInvite(
       expiresAt,
     });
 
+    const [orgRow] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, ctx.organizationId))
+      .limit(1);
+
     const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
     const inviteUrl = `${baseUrl.replace(/\/$/, "")}/invite/${token}`;
 
+    const roleLabel =
+      INVITE_ROLE_LABEL[parsed.data.role] ?? parsed.data.role;
+    const emailResult = await sendOrganizationInviteEmail({
+      to: email,
+      inviteUrl,
+      organizationName: orgRow?.name ?? "tu organización",
+      roleLabel,
+    });
+
     revalidatePath("/dashboard/settings/members");
-    return { data: { inviteUrl, expiresAt } };
+    return {
+      data: {
+        inviteUrl,
+        expiresAt,
+        emailSent: emailResult.sent,
+        emailDeliveryNote:
+          emailResult.sent === false
+            ? emailResult.reason === "missing_api_key"
+              ? "Correo no enviado: falta RESEND_API_KEY (sigue el enlace manual)."
+              : emailResult.reason === "missing_from"
+                ? "Correo no enviado: falta RESEND_FROM_EMAIL."
+                : `Correo no enviado: ${emailResult.detail ?? emailResult.reason}`
+            : undefined,
+      },
+    };
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -445,8 +483,14 @@ export async function submitOrganizationInviteForm(
       `/dashboard/settings/members?inviteError=${encodeURIComponent(String(res.error))}`,
     );
   }
+  const emailQ =
+    res.data.emailSent === true
+      ? "&inviteEmailSent=1"
+      : res.data.emailDeliveryNote
+        ? `&inviteEmailSent=0&inviteEmailNote=${encodeURIComponent(res.data.emailDeliveryNote)}`
+        : "&inviteEmailSent=0";
   redirect(
-    `/dashboard/settings/members?inviteSent=1&inviteUrl=${encodeURIComponent(res.data.inviteUrl)}`,
+    `/dashboard/settings/members?inviteSent=1&inviteUrl=${encodeURIComponent(res.data.inviteUrl)}${emailQ}`,
   );
 }
 

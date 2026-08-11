@@ -14,6 +14,7 @@ import { requireOrganizationContext } from "@/server/auth/context";
 import { setActiveOrganization } from "@/server/auth/membership";
 import { requireCaseInOrganization } from "@/server/auth/guards";
 import { canManageCaseAssignments } from "@/server/auth/permissions";
+import { logAuditEvent } from "@/server/auth/audit";
 
 export async function listOrganizationMembers() {
   try {
@@ -155,6 +156,74 @@ export async function assignUserToCase(params: {
         userId: assignee.id,
       });
     }
+
+    revalidatePath(`/dashboard/cases/${params.caseId}`);
+    revalidatePath("/dashboard/cases");
+    return { data: { ok: true as const } };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+/**
+ * Removes a user's case assignment. Does not remove org membership.
+ */
+export async function unassignUserFromCase(params: {
+  caseId: string;
+  userId: string;
+}) {
+  try {
+    const ctx = await requireOrganizationContext();
+    if ("error" in ctx) return { error: ctx.error };
+
+    if (!canManageCaseAssignments(ctx.role)) {
+      return { error: "No tienes permiso para quitar participantes." };
+    }
+
+    const gate = await requireCaseInOrganization(params.caseId);
+    if ("error" in gate) return { error: gate.error };
+
+    const [target] = await db
+      .select({ email: users.email })
+      .from(users)
+      .innerJoin(
+        organizationMembers,
+        eq(organizationMembers.userId, users.id),
+      )
+      .where(
+        and(
+          eq(users.id, params.userId),
+          eq(organizationMembers.organizationId, ctx.organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!target) {
+      return { error: "Usuario no pertenece a esta organización." };
+    }
+
+    const [removed] = await db
+      .delete(caseAssignments)
+      .where(
+        and(
+          eq(caseAssignments.caseId, params.caseId),
+          eq(caseAssignments.userId, params.userId),
+        ),
+      )
+      .returning({ id: caseAssignments.id });
+
+    if (!removed) {
+      return { error: "No había asignación para ese usuario en este caso." };
+    }
+
+    await logAuditEvent({
+      ctx,
+      caseId: params.caseId,
+      eventType: "case.unassign_participant",
+      entityType: "case_assignment",
+      entityId: params.caseId,
+      newData: { userId: params.userId, email: target.email },
+    });
 
     revalidatePath(`/dashboard/cases/${params.caseId}`);
     revalidatePath("/dashboard/cases");

@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { assignUserToCase } from "@/server/actions/org-members";
+import { assignUserToCase, unassignUserFromCase } from "@/server/actions/org-members";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,18 @@ export function CaseAssignmentsBar({
     });
   }
 
+  function handleUnassign(userId: string) {
+    startTransition(async () => {
+      const res = await unassignUserFromCase({ caseId, userId });
+      if ("error" in res) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Participante quitado del caso.");
+      router.refresh();
+    });
+  }
+
   if (!canManage && assignees.length === 0) {
     return null;
   }
@@ -80,10 +92,24 @@ export function CaseAssignmentsBar({
             {assignees.map((a) => (
               <li
                 key={a.userId}
-                className="flex flex-col gap-0.5 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
               >
-                <span className="font-medium">{a.fullName}</span>
-                <span className="text-muted-foreground">{a.email}</span>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-medium">{a.fullName}</span>
+                  <span className="truncate text-muted-foreground">{a.email}</span>
+                </div>
+                {canManage ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 self-start sm:self-center"
+                    disabled={pending}
+                    onClick={() => handleUnassign(a.userId)}
+                  >
+                    Quitar
+                  </Button>
+                ) : null}
               </li>
             ))}
           </ul>

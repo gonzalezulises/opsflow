@@ -66,16 +66,17 @@ const sql = postgres(url, { max: 1, ssl: "require", connect_timeout: 20 });
     console.log(JSON.stringify({ connectionTest: "ok" }));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    const code =
+      e && typeof e === "object" && "code" in e ? String(e.code) : undefined;
     let hint;
     if (/2600:/.test(msg) || /ENETUNREACH/.test(msg)) {
       hint =
         "Desde GitHub Actions suele fallar la conexión Direct si el DNS solo devuelve IPv6. En Supabase → Connect → Session pooler (puerto 5432), copia esa URI y úsala como DATABASE_URL_DIRECT en el secreto del repo.";
-    } else if (code === "28P01") {
+    } else if (code === "28P01" || /password authentication failed/i.test(msg)) {
       hint =
         info && info.isPooler
           ? "28P01 contra el pooler: revisa que el usuario sea postgres.<project-ref> (no postgres a secas) y que la contraseña sea la actual. Copia la URI verbatim desde Supabase → Connect → Session pooler."
-          : "28P01: usuario o contraseña incorrectos. Verifica la contraseña actual en Supabase → Project Settings → Database y el usuario de la URI.";
+          : "28P01: usuario o contraseña incorrectos. Verifica la contraseña actual en Supabase → Project Settings → Database y el usuario de la URI. Si la contraseña tiene @ : / # % etc., codifícala con encodeURIComponent solo en el segmento de password.";
     }
     console.error(
       JSON.stringify({

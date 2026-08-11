@@ -11,8 +11,19 @@ function isPublicPath(pathname: string): boolean {
   return false;
 }
 
+function nextWithRequestId(request: NextRequest, requestId: string) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
+  const res = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+  res.headers.set("x-request-id", requestId);
+  return res;
+}
+
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  const requestId = globalThis.crypto.randomUUID();
+  let supabaseResponse = nextWithRequestId(request, requestId);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,7 +37,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = nextWithRequestId(request, requestId);
           cookiesToSet.forEach(({ name, value, options: opts }) =>
             supabaseResponse.cookies.set(name, value, opts),
           );
@@ -44,7 +55,9 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    redirectResponse.headers.set("x-request-id", requestId);
+    return redirectResponse;
   }
 
   return supabaseResponse;

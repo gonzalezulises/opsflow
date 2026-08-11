@@ -40,6 +40,7 @@ import { getCase } from "@/server/actions/cases";
 import { requireCaseInOrganization } from "@/server/auth/guards";
 import { getModel } from "@/server/ai/client";
 import { assertAiRateLimit, assertOrgAiVolumeLimit, recordAiInteraction } from "@/server/ai/rate-limit";
+import { logServerJson } from "@/lib/server-log";
 
 export type AIActionType =
   | "diagnostic_summary"
@@ -88,11 +89,23 @@ export async function getAIInsight(
 
   const limit = await assertAiRateLimit(gate.ctx.appUserId);
   if (limit) {
+    await logServerJson("warn", "ai.rate_limit.user", {
+      caseId,
+      actionType,
+      organizationId: gate.ctx.organizationId,
+      error: limit.error,
+    });
     return { data: null, error: limit.error };
   }
 
   const orgLimit = await assertOrgAiVolumeLimit(gate.ctx.organizationId);
   if (orgLimit) {
+    await logServerJson("warn", "ai.rate_limit.organization", {
+      caseId,
+      actionType,
+      organizationId: gate.ctx.organizationId,
+      error: orgLimit.error,
+    });
     return { data: null, error: orgLimit.error };
   }
 
@@ -112,6 +125,25 @@ export async function getAIInsight(
       actionType,
       modelUsed: getModel(),
       tokensUsed: result.tokensUsed,
+      success: true,
+    });
+  } else if (result.error) {
+    await logServerJson("warn", "ai.generate.failed", {
+      caseId,
+      actionType,
+      module: actionType,
+      error: result.error,
+      organizationId: gate.ctx.organizationId,
+    });
+    await recordAiInteraction({
+      appUserId: gate.ctx.appUserId,
+      caseId,
+      module: actionType,
+      actionType,
+      modelUsed: getModel(),
+      tokensUsed: result.tokensUsed ?? 0,
+      success: false,
+      errorMessage: result.error,
     });
   }
 
@@ -138,11 +170,23 @@ export async function generateFromAI(
 
   const limit = await assertAiRateLimit(gate.ctx.appUserId);
   if (limit) {
+    await logServerJson("warn", "ai.rate_limit.user", {
+      caseId,
+      actionType,
+      organizationId: gate.ctx.organizationId,
+      error: limit.error,
+    });
     return { data: null, error: limit.error };
   }
 
   const orgLimit = await assertOrgAiVolumeLimit(gate.ctx.organizationId);
   if (orgLimit) {
+    await logServerJson("warn", "ai.rate_limit.organization", {
+      caseId,
+      actionType,
+      organizationId: gate.ctx.organizationId,
+      error: orgLimit.error,
+    });
     return { data: null, error: orgLimit.error };
   }
 
@@ -226,6 +270,25 @@ export async function generateFromAI(
       actionType,
       modelUsed: getModel(),
       tokensUsed: result.tokensUsed,
+      success: true,
+    });
+  } else if (result.error) {
+    await logServerJson("warn", "ai.generate.failed", {
+      caseId,
+      actionType,
+      module: actionType,
+      error: result.error,
+      organizationId: gate.ctx.organizationId,
+    });
+    await recordAiInteraction({
+      appUserId: gate.ctx.appUserId,
+      caseId,
+      module: actionType,
+      actionType,
+      modelUsed: getModel(),
+      tokensUsed: result.tokensUsed ?? 0,
+      success: false,
+      errorMessage: result.error,
     });
   }
 

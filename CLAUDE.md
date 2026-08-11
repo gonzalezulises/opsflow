@@ -30,7 +30,7 @@
 - `npm run build` — build de producción
 - `npm run typecheck` — verificar tipos
 - `npm run test` — tests unitarios
-- `npm run db:push` — push schema a Supabase
+- `npm run db:push` — push schema a Postgres (`docs/DATABASE.md`: pooler vs directo)
 - `npm run db:seed` — seed del caso base
 
 ## Caso base

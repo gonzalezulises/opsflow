@@ -1,0 +1,22 @@
+-- Plantilla de referencia para Row Level Security (NO ejecutar ciego en prod).
+-- OpsFlow hoy usa Drizzle con rol de servicio: estas políticas solo aplican si la conexión
+-- usa un rol sujeto a RLS (p. ej. `authenticated` vía PostgREST o sesión restringida).
+--
+-- Pasos típicos cuando se active RLS en tablas tenant-scoped:
+-- 1. ALTER TABLE ... ENABLE ROW LEVEL SECURITY;
+-- 2. CREATE POLICY ... USING (organization_id = (auth.jwt() ->> 'org_id')::uuid);
+-- 3. Sustituir 'org_id' por la claim real que emitáis en el JWT (custom claims / app_metadata).
+--
+-- Ejemplo ilustrativo (comentado):
+--
+-- ALTER TABLE cases ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY cases_select_member ON cases
+--   FOR SELECT
+--   USING (
+--     organization_id IN (
+--       SELECT organization_id FROM organization_members
+--       WHERE user_id = (SELECT id FROM users WHERE email = (auth.jwt() ->> 'email'))
+--     )
+--   );
+
+SELECT 1; -- no-op para que el fichero sea SQL válido si algún runner lo ejecuta

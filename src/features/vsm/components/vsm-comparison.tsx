@@ -237,7 +237,7 @@ export function VSMComparisonView({ caseId, comparison, narrative, futureSteps, 
 
           {/* AI refinement */}
           {!aiResult && (
-            <Button variant="outline" size="sm" onClick={handleRefineWithAI} disabled={aiLoading} className="print:hidden">
+            <Button variant="outline" size="sm" onClick={handleRefineWithAI} disabled={aiLoading} className="print-hidden">
               {aiLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Sparkles className="mr-2 size-4" />}
               {aiLoading ? "Analizando..." : "Refinar narrativa con IA"}
             </Button>

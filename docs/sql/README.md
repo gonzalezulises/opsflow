@@ -18,3 +18,7 @@ de base de datos; no sustituyen a `drizzle-kit` para el esquema Drizzle.
 
 - `002_organization_members.sql` — tablas `organization_members` y `case_assignments` + backfill desde `users` (idempotente).
 - `003_organization_invites.sql` — tabla `organization_invites` para onboarding multi-tenant.
+- `004_ai_interactions_observability.sql` — columnas `success` y `error_message` en `ai_interactions` (idempotente).
+- `005_rls_policies_template.sql` — plantilla comentada para RLS (referencia; ver ADR-005).
+
+Ver también `docs/DATABASE.md` (Drizzle push, `DATABASE_URL_DIRECT`, Supabase pooler).

@@ -18,6 +18,8 @@ type Props = {
     inviteSent?: string;
     inviteError?: string;
     inviteUrl?: string;
+    inviteEmailSent?: string;
+    inviteEmailNote?: string;
   }>;
 };
 
@@ -49,9 +51,20 @@ export default async function MembersSettingsPage({ searchParams }: Props) {
       {qs.inviteSent ? (
         <div className="space-y-2 rounded-md border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100">
           <p>Invitación creada correctamente.</p>
+          {qs.inviteEmailSent === "1" ? (
+            <p className="text-xs font-medium">
+              Se envió un correo al destinatario con el enlace (Resend).
+            </p>
+          ) : qs.inviteEmailNote ? (
+            <p className="text-xs text-amber-900 dark:text-amber-100">
+              {qs.inviteEmailNote}
+            </p>
+          ) : null}
           {qs.inviteUrl ? (
             <div className="space-y-1">
-              <p className="text-xs font-medium">Enlace (compártelo por un canal seguro):</p>
+              <p className="text-xs font-medium">
+                Enlace (por si el correo no llegó o no está configurado Resend):
+              </p>
               <code className="block break-all rounded bg-white/80 p-2 text-xs text-foreground dark:bg-black/30">
                 {qs.inviteUrl}
               </code>
@@ -107,8 +120,8 @@ export default async function MembersSettingsPage({ searchParams }: Props) {
           <CardHeader>
             <CardTitle className="text-base">Invitar miembro</CardTitle>
             <CardDescription>
-              Genera un enlace de invitación (válido 7 días). El destinatario debe
-              iniciar sesión con el mismo correo.
+              Genera una invitación (válida 7 días). Con Resend configurado se envía el
+              enlace por correo; siempre puedes copiar el enlace manualmente.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

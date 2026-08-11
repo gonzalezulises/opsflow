@@ -26,7 +26,7 @@ export function CaseNav() {
   const CurrentIcon = currentModule?.icon;
 
   return (
-    <div className="space-y-2 print:hidden">
+    <div className="space-y-2 print-hidden">
       {/* Step bar — always visible */}
       <div className="flex items-center gap-1 overflow-x-auto rounded-lg border bg-muted/50 p-1">
         {CASE_MODULES.map((mod) => {

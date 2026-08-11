@@ -180,14 +180,14 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
   return (
     <div className="space-y-6" id="executive-report">
       {/* Print-only header */}
-      <div className="hidden print:block mb-6 border-b pb-4">
+      <div className="hidden print-block mb-6 border-b pb-4">
         <h1 className="text-2xl font-bold">Reporte Ejecutivo — {data.case.companyName}</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {data.case.sector} | {data.case.processFocus} | {new Date().toLocaleDateString("es", { year: "numeric", month: "long", day: "numeric" })}
         </p>
       </div>
 
-      <div className="flex items-center justify-between print:hidden">
+      <div className="flex items-center justify-between print-hidden">
         <div>
           <h3 className="text-lg font-semibold">Resumen ejecutivo</h3>
           <p className="text-sm text-muted-foreground">{moduleCount} de 6 módulos completados</p>
@@ -414,7 +414,7 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
 
       {/* Improvement narrative */}
       {data.improvement && (
-        <Card className="border-primary/20 bg-primary/[0.02] print:break-before">
+        <Card className="border-primary/20 bg-primary/[0.02] print-break-before">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <TrendingDown className="size-4 text-primary" />
@@ -554,11 +554,11 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
       )}
 
       {/* ─── Detailed sections (visible in print, collapsible on screen) ─── */}
-      <Separator className="print:hidden" />
+      <Separator className="print-hidden" />
 
       {/* Risks detail */}
       {data.topRisks.length > 0 && (
-        <Card className="print:break-before">
+        <Card className="print-break-before">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldAlert className="size-4" />
@@ -624,7 +624,7 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
 
       {/* Initiatives detail */}
       {data.allInitiatives.length > 0 && (
-        <Card className="print:break-before">
+        <Card className="print-break-before">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <ListOrdered className="size-4" />
@@ -697,7 +697,7 @@ export function ExecutiveReport({ caseId, data }: { caseId: string; data: Report
       )}
 
       {/* Print footer */}
-      <div className="hidden print:block mt-8 pt-4 border-t text-center text-xs text-muted-foreground">
+      <div className="hidden print-block mt-8 pt-4 border-t text-center text-xs text-muted-foreground">
         <p>Generado con OpsFlow — Bootcamp de Optimización Operativa IESA — {new Date().toLocaleDateString("es", { year: "numeric", month: "long", day: "numeric" })}</p>
       </div>
     </div>

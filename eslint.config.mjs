@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Node CommonJS helpers (CI / ops); not App Router TS.
+    "scripts/**/*.cjs",
   ]),
   {
     // Los scripts Node CommonJS (*.cjs) usan require() legítimamente.

@@ -555,6 +555,8 @@ export const aiInteractions = pgTable(
     output: jsonb("output"),
     modelUsed: text("model_used"),
     tokensUsed: integer("tokens_used"),
+    success: boolean("success").notNull().default(true),
+    errorMessage: text("error_message"),
   },
   (t) => [
     index("ai_interactions_case_id_idx").on(t.caseId),

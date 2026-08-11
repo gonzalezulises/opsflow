@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/server/db";
-import { initiatives, prioritizationWeights, processStepInitiatives } from "@/server/db/schema";
+import {
+  cases,
+  initiatives,
+  organizations,
+  prioritizationWeights,
+  processStepInitiatives,
+} from "@/server/db/schema";
 import {
   requireCaseInOrganization,
   requireWritableCase,
@@ -14,6 +20,11 @@ import {
   DEFAULT_WEIGHTS,
   type PrioritizationWeights,
 } from "@/lib/calculations";
+import {
+  assertWeightsSumOne,
+  parseOrgSettingsJson,
+  weightsFromForm,
+} from "@/lib/organization-settings";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -51,17 +62,40 @@ async function getWeightsForCase(caseId: string): Promise<PrioritizationWeights>
     .from(prioritizationWeights)
     .where(eq(prioritizationWeights.caseId, caseId));
 
-  if (rows.length === 0) return DEFAULT_WEIGHTS;
+  if (rows.length > 0) {
+    const w = rows[0];
+    return {
+      impactLeadTime: Number(w.impactLeadTime),
+      impactEconomic: Number(w.impactEconomic),
+      impactResilience: Number(w.impactResilience),
+      feasibility30d: Number(w.feasibility30d),
+      effort: Number(w.effort),
+      externalDependency: Number(w.externalDependency),
+    };
+  }
 
-  const w = rows[0];
-  return {
-    impactLeadTime: Number(w.impactLeadTime),
-    impactEconomic: Number(w.impactEconomic),
-    impactResilience: Number(w.impactResilience),
-    feasibility30d: Number(w.feasibility30d),
-    effort: Number(w.effort),
-    externalDependency: Number(w.externalDependency),
-  };
+  const [caseRow] = await db
+    .select({ organizationId: cases.organizationId })
+    .from(cases)
+    .where(eq(cases.id, caseId))
+    .limit(1);
+
+  if (!caseRow?.organizationId) return DEFAULT_WEIGHTS;
+
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, caseRow.organizationId))
+    .limit(1);
+
+  const prefs = parseOrgSettingsJson(org?.settings ?? null);
+  const dw = prefs.defaultPrioritizationWeights;
+  if (!dw) return DEFAULT_WEIGHTS;
+
+  const candidate = weightsFromForm(dw);
+  if (assertWeightsSumOne(candidate)) return DEFAULT_WEIGHTS;
+
+  return candidate;
 }
 
 // ---------------------------------------------------------------------------

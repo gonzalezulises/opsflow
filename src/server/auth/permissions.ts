@@ -27,6 +27,14 @@ export function canInviteToOrganization(role: AppUserRole): boolean {
   );
 }
 
+/** Perfil y preferencias del tenant (nombre, slug, settings JSON). */
+export function canManageOrganizationSettings(role: AppUserRole): boolean {
+  if (isReadOnlyRole(role)) return false;
+  return (
+    role === "super_admin" || role === "admin" || role === "facilitator"
+  );
+}
+
 const ORG_INVITE_ROLES = [
   "admin",
   "facilitator",

@@ -61,6 +61,8 @@ export async function recordAiInteraction(params: {
   actionType: string;
   modelUsed: string | null;
   tokensUsed: number;
+  success?: boolean;
+  errorMessage?: string | null;
 }): Promise<void> {
   try {
     await db.insert(aiInteractions).values({
@@ -69,6 +71,8 @@ export async function recordAiInteraction(params: {
       actionType: params.actionType,
       modelUsed: params.modelUsed,
       tokensUsed: params.tokensUsed,
+      success: params.success !== false,
+      errorMessage: params.errorMessage ?? null,
       createdBy: params.appUserId,
       updatedBy: params.appUserId,
     });

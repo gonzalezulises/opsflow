@@ -15,7 +15,8 @@
 1. Supabase → **Project Settings → Database** (o **Connect** en el header) → elige **Session pooler** (puerto **5432**), no *Transaction pooler* (6543). Para **GitHub Actions** suele ser más fiable que **Direct** porque el runner a menudo **no tiene ruta IPv6** hacia el host “directo” de Supabase (error `ENETUNREACH` a `2600:…`). La app en **Vercel** puede seguir usando **Transaction pooler** en `DATABASE_URL`.
 2. Repo GitHub → **Settings → Secrets and variables → Actions → New repository secret**
    - Nombre: **`DATABASE_URL_DIRECT`**
-   - Valor: la URI completa `postgresql://postgres.[ref]:[PASSWORD]@aws-0-....pooler.supabase.com:5432/postgres` o la cadena **Session/Direct** que muestre el panel (debe ser **5432**).
+   - Valor: la URI completa que muestre **Connect → Session pooler** (puerto **5432**), **sin editar**. En el *pooler* (Supavisor) el usuario debe ser **`postgres.<project-ref>`** (el ref es el subdominio de `https://<ref>.supabase.co`), **no** solo `postgres`. Si pegás la plantilla de *Direct* (`db.<ref>.supabase.co` con usuario `postgres`) o cambiáis el usuario a mano contra `*.pooler.supabase.com`, Postgres suele responder **`28P01` / password authentication failed** aunque la contraseña sea correcta: el mensaje engaña.
+   - Ejemplo de forma: `postgresql://postgres.[ref]:[PASSWORD]@aws-0-....pooler.supabase.com:5432/postgres`
 3. **Actions** → **Drizzle DB push** → **Run workflow** → en *confirm* escribe exactamente **`push`** → Run workflow.
 
 Si preferís el nombre `DIRECT_URL`, podéis crear ese secreto en su lugar; `drizzle.config.ts` lo acepta en segundo lugar.
@@ -30,6 +31,7 @@ Es el fallo más confuso: **parece** contraseña incorrecta, pero casi siempre e
 - Como `28P01` es rechazo de autenticación (no de red), GitHub **sí** llegó al servidor: el problema está en la URI, no en la conectividad.
 - **Fix:** copia la URI verbatim desde Supabase → Connect → **Session pooler** (ya trae el usuario `postgres.<project-ref>`) y pégala en el secreto sin editarla a mano. El paso `Verify Postgres connection` ahora detecta este caso y lo marca en el log como `error: "pooler_user_missing_ref"` antes incluso de intentar conectar.
 - Solo si el usuario **ya** lleva el ref y aun así da `28P01`, entonces sí revisa la contraseña en Supabase → Project Settings → Database.
+- Si el host es **`db.<ref>.supabase.co`** (Direct), entonces sí suele ser contraseña incorrecta o password con caracteres reservados sin URL-encode en la URI.
 
 ### Si el job falla en “Pulling schema”
 

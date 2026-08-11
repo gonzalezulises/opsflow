@@ -145,14 +145,30 @@
   }
 }
 
+@layer utilities {
+  @media print {
+    .print-hidden {
+      display: none !important;
+    }
+    .print-block {
+      display: block !important;
+    }
+    .print-break-before {
+      break-before: page;
+    }
+    .print-grid-cols-1 {
+      grid-template-columns: 1fr !important;
+    }
+  }
+}
+
 /* ─── Print styles ─── */
 @media print {
   /* Hide chrome */
   header,
   footer,
   nav,
-  [data-slot="sheet-content"],
-  .print\\:hidden {
+  [data-slot="sheet-content"] {
     display: none !important;
   }
 
@@ -184,20 +200,5 @@
     color: black !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
-  }
-
-  /* Grids go single column at narrow widths */
-  .print\\:grid-cols-1 {
-    grid-template-columns: 1fr !important;
-  }
-
-  /* Page breaks */
-  .print\\:break-before {
-    break-before: page;
-  }
-
-  /* Show print-only elements */
-  .print\\:block {
-    display: block !important;
   }
 }
