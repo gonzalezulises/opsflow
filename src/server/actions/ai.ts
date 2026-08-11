@@ -38,7 +38,7 @@ import { getDiagnosticResponses } from "@/server/actions/diagnostic";
 import { getInitiatives } from "@/server/actions/prioritization";
 import { getCase } from "@/server/actions/cases";
 import { requireCaseInOrganization } from "@/server/auth/guards";
-import { getModel, isAiConfigured } from "@/server/ai/client";
+import { isAiConfigured } from "@/server/ai/client";
 import { assertAiRateLimit, assertOrgAiVolumeLimit, recordAiInteraction } from "@/server/ai/rate-limit";
 import { logServerJson } from "@/lib/server-log";
 
@@ -81,7 +81,7 @@ export async function getAIInsight(
   if (!isAiConfigured()) {
     return {
       data: null,
-      error: "IA no configurada (OPENAI_BASE_URL o OPENAI_API_KEY)",
+      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY)",
     };
   }
 
@@ -121,12 +121,20 @@ export async function getAIInsight(
   const result = await generateStructured(prompt, config.schema, config.name);
 
   if (!result.error && result.data != null) {
+    if (result.usedFallback) {
+      await logServerJson("warn", "ai.generate.fallback", {
+        caseId,
+        actionType,
+        organizationId: gate.ctx.organizationId,
+        modelUsed: result.modelUsed,
+      });
+    }
     await recordAiInteraction({
       appUserId: gate.ctx.appUserId,
       caseId,
       module: actionType,
       actionType,
-      modelUsed: getModel(),
+      modelUsed: result.modelUsed,
       tokensUsed: result.tokensUsed,
       success: true,
     });
@@ -137,13 +145,14 @@ export async function getAIInsight(
       module: actionType,
       error: result.error,
       organizationId: gate.ctx.organizationId,
+      modelUsed: result.modelUsed,
     });
     await recordAiInteraction({
       appUserId: gate.ctx.appUserId,
       caseId,
       module: actionType,
       actionType,
-      modelUsed: getModel(),
+      modelUsed: result.modelUsed || "unknown",
       tokensUsed: result.tokensUsed ?? 0,
       success: false,
       errorMessage: result.error,
@@ -165,7 +174,7 @@ export async function generateFromAI(
   if (!isAiConfigured()) {
     return {
       data: null,
-      error: "IA no configurada (OPENAI_BASE_URL o OPENAI_API_KEY)",
+      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY)",
     };
   }
 
@@ -269,12 +278,20 @@ export async function generateFromAI(
   const result = await generateStructured(prompt, config.schema, config.name);
 
   if (!result.error && result.data != null) {
+    if (result.usedFallback) {
+      await logServerJson("warn", "ai.generate.fallback", {
+        caseId,
+        actionType,
+        organizationId: gate.ctx.organizationId,
+        modelUsed: result.modelUsed,
+      });
+    }
     await recordAiInteraction({
       appUserId: gate.ctx.appUserId,
       caseId,
       module: actionType,
       actionType,
-      modelUsed: getModel(),
+      modelUsed: result.modelUsed,
       tokensUsed: result.tokensUsed,
       success: true,
     });
@@ -285,13 +302,14 @@ export async function generateFromAI(
       module: actionType,
       error: result.error,
       organizationId: gate.ctx.organizationId,
+      modelUsed: result.modelUsed,
     });
     await recordAiInteraction({
       appUserId: gate.ctx.appUserId,
       caseId,
       module: actionType,
       actionType,
-      modelUsed: getModel(),
+      modelUsed: result.modelUsed || "unknown",
       tokensUsed: result.tokensUsed ?? 0,
       success: false,
       errorMessage: result.error,

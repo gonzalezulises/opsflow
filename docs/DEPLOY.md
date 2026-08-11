@@ -61,10 +61,13 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 DATABASE_URL=postgresql://postgres:xxx@db.xxx.supabase.co:5432/postgres
-# LLM en DGX Spark (vLLM gemma4 vía Tailscale Funnel + Caddy)
+# LLM primario: DGX Spark (vLLM gemma4 vía Tailscale Funnel + Caddy)
 OPENAI_BASE_URL=https://spark-279e.tail0b36db.ts.net/llm-api/v1
 OPENAI_API_KEY=<Bearer del Caddy /llm-api>
 OPENAI_MODEL=gemma4
+# Backup: ChatGPT cloud si Spark falla
+OPENAI_BACKUP_API_KEY=sk-...
+OPENAI_BACKUP_MODEL=gpt-4o
 APP_URL=http://localhost:3000
 ```
 
@@ -108,6 +111,8 @@ En Vercel Dashboard > Settings > Environment Variables, agregar:
 | `OPENAI_BASE_URL` | Production, Preview (Spark Funnel `/llm-api/v1`) |
 | `OPENAI_API_KEY` | Production, Preview (Bearer Caddy `/llm-api`) |
 | `OPENAI_MODEL` | Production, Preview (`gemma4`) |
+| `OPENAI_BACKUP_API_KEY` | Production, Preview (ChatGPT cloud) |
+| `OPENAI_BACKUP_MODEL` | Production, Preview (`gpt-4o`) |
 | `APP_URL` | Production (URL del dominio) |
 
 ## 5. Configurar dominio (opcional)
