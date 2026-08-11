@@ -65,9 +65,10 @@ DATABASE_URL=postgresql://postgres:xxx@db.xxx.supabase.co:5432/postgres
 OPENAI_BASE_URL=https://spark-279e.tail0b36db.ts.net/llm-api/v1
 OPENAI_API_KEY=<Bearer del Caddy /llm-api>
 OPENAI_MODEL=gemma4
-# Backup: ChatGPT cloud si Spark falla
-OPENAI_BACKUP_API_KEY=sk-...
-OPENAI_BACKUP_MODEL=gpt-4o
+# Backup: OpenCode Zen si Spark falla
+OPENAI_BACKUP_BASE_URL=https://opencode.ai/zen/v1
+OPENAI_BACKUP_API_KEY=<key de opencode.ai/auth>
+OPENAI_BACKUP_MODEL=deepseek-v4-flash
 APP_URL=http://localhost:3000
 ```
 
@@ -111,8 +112,9 @@ En Vercel Dashboard > Settings > Environment Variables, agregar:
 | `OPENAI_BASE_URL` | Production, Preview (Spark Funnel `/llm-api/v1`) |
 | `OPENAI_API_KEY` | Production, Preview (Bearer Caddy `/llm-api`) |
 | `OPENAI_MODEL` | Production, Preview (`gemma4`) |
-| `OPENAI_BACKUP_API_KEY` | Production, Preview (ChatGPT cloud) |
-| `OPENAI_BACKUP_MODEL` | Production, Preview (`gpt-4o`) |
+| `OPENAI_BACKUP_BASE_URL` | Production, Preview (`https://opencode.ai/zen/v1`) |
+| `OPENAI_BACKUP_API_KEY` | Production, Preview (OpenCode Zen) |
+| `OPENAI_BACKUP_MODEL` | Production, Preview (`deepseek-v4-flash`) |
 | `APP_URL` | Production (URL del dominio) |
 
 ## 5. Configurar dominio (opcional)

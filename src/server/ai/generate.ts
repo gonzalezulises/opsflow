@@ -80,7 +80,7 @@ export async function generateStructured<T extends z.ZodType>(
   if (providers.length === 0) {
     return {
       data: null,
-      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY)",
+      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY|OPENCODE_API_KEY)",
       tokensUsed: 0,
       modelUsed: "",
       usedFallback: false,

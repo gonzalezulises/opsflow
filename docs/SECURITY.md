@@ -49,7 +49,8 @@ Ver **`docs/MULTI_TENANT.md`** para variables y flujos.
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only | Solo Server Actions y scripts |
 | `OPENAI_API_KEY` | Server only | Bearer del proxy Spark (primario) |
 | `OPENAI_BASE_URL` | Server only | Endpoint OpenAI-compatible (Funnel Spark `/llm-api/v1`) |
-| `OPENAI_BACKUP_API_KEY` | Server only | Key cloud OpenAI (ChatGPT backup) |
+| `OPENAI_BACKUP_API_KEY` | Server only | Key OpenCode Zen (backup; alias `OPENCODE_API_KEY`) |
+| `OPENAI_BACKUP_BASE_URL` | Server only | Default `https://opencode.ai/zen/v1` |
 | `DATABASE_URL` | Server only | Solo Drizzle ORM |
 | `NEXT_PUBLIC_SUPABASE_URL` | Pública | URL del proyecto Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Pública | Key anónima (limitada por RLS) |

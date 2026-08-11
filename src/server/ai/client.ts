@@ -9,6 +9,9 @@ export type AiProvider = {
   label: string;
 };
 
+const OPENCODE_ZEN_BASE_URL = "https://opencode.ai/zen/v1";
+const DEFAULT_OPENCODE_MODEL = "deepseek-v4-flash";
+
 let _primary: OpenAI | null = null;
 let _backup: OpenAI | null = null;
 
@@ -27,19 +30,28 @@ function getPrimaryApiKey(): string | undefined {
   return trimEnv("OPENAI_API_KEY");
 }
 
-/** ChatGPT cloud backup key (api.openai.com). */
+/** OpenCode Zen (or other OpenAI-compatible) backup key. */
 function getBackupApiKey(): string | undefined {
-  return trimEnv("OPENAI_BACKUP_API_KEY");
+  return trimEnv("OPENAI_BACKUP_API_KEY") || trimEnv("OPENCODE_API_KEY");
+}
+
+function getBackupBaseUrl(): string {
+  return trimEnv("OPENAI_BACKUP_BASE_URL") || OPENCODE_ZEN_BASE_URL;
 }
 
 export function getPrimaryModel(): string {
-  if (trimEnv("OPENAI_MODEL")) return trimEnv("OPENAI_MODEL")!;
+  const explicit = trimEnv("OPENAI_MODEL");
+  if (explicit) return explicit;
   if (getPrimaryBaseUrl()) return "gemma4";
   return "gpt-4o";
 }
 
 export function getBackupModel(): string {
-  return trimEnv("OPENAI_BACKUP_MODEL") || "gpt-4o";
+  return (
+    trimEnv("OPENAI_BACKUP_MODEL") ||
+    trimEnv("OPENCODE_MODEL") ||
+    DEFAULT_OPENCODE_MODEL
+  );
 }
 
 /** @deprecated Prefer getPrimaryModel / resolve providers; kept for call sites. */
@@ -47,7 +59,7 @@ export function getModel(): string {
   return getPrimaryModel();
 }
 
-/** True when Spark primary and/or ChatGPT backup is configured. */
+/** True when Spark primary and/or OpenCode backup is configured. */
 export function isAiConfigured(): boolean {
   return Boolean(getPrimaryBaseUrl() || getPrimaryApiKey() || getBackupApiKey());
 }
@@ -76,18 +88,17 @@ function getBackupClient(): OpenAI | null {
   const apiKey = getBackupApiKey();
   if (!apiKey) return null;
   if (!_backup) {
-    // Force cloud host: the SDK otherwise inherits process.env.OPENAI_BASE_URL (Spark).
+    // Explicit base URL: SDK would otherwise inherit process.env.OPENAI_BASE_URL (Spark).
     _backup = new OpenAI({
       apiKey,
-      baseURL: "https://api.openai.com/v1",
+      baseURL: getBackupBaseUrl(),
     });
   }
   return _backup;
 }
 
 /**
- * Ordered providers: Spark (or primary OpenAI) first, then ChatGPT cloud backup.
- * Backup is skipped when primary already is cloud (no BASE_URL) and uses the same key space.
+ * Ordered providers: Spark (primary) first, then OpenCode Zen backup.
  */
 export function getAiProviders(): AiProvider[] {
   const providers: AiProvider[] = [];
@@ -105,15 +116,12 @@ export function getAiProviders(): AiProvider[] {
 
   const backup = getBackupClient();
   if (backup) {
-    // Avoid duplicate cloud call when primary is already api.openai.com with no custom base.
-    if (primaryBase || !primaryKey) {
-      providers.push({
-        kind: "backup",
-        client: backup,
-        model: getBackupModel(),
-        label: `openai-backup:${getBackupModel()}`,
-      });
-    }
+    providers.push({
+      kind: "backup",
+      client: backup,
+      model: getBackupModel(),
+      label: `opencode:${getBackupModel()}`,
+    });
   }
 
   return providers;

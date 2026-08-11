@@ -7,20 +7,23 @@
 3. **Server-side only.** El API key nunca llega al cliente.
 4. **Transparencia.** El usuario siempre sabe cuándo un contenido fue generado por IA.
 
-## Runtime LLM (DGX Spark + ChatGPT backup)
+## Runtime LLM (DGX Spark + OpenCode Zen backup)
 
 OpsFlow usa el SDK de OpenAI contra un endpoint **OpenAI-compatible**. Orden:
 
 1. **Primario — DGX Spark** (`gemma4` vía Funnel/Caddy → vLLM)
-2. **Backup — ChatGPT cloud** (`gpt-4o`) si Spark falla o no devuelve structured output
+2. **Backup — OpenCode Zen** (`deepseek-v4-flash` u otro modelo con `/chat/completions`) si Spark falla
 
 | Variable | Valor típico |
 |----------|----------------|
 | `OPENAI_BASE_URL` | `https://spark-279e.tail0b36db.ts.net/llm-api/v1` |
 | `OPENAI_API_KEY` | Bearer del handle Caddy `/llm-api` |
 | `OPENAI_MODEL` | `gemma4` |
-| `OPENAI_BACKUP_API_KEY` | `sk-...` (API cloud OpenAI) |
-| `OPENAI_BACKUP_MODEL` | `gpt-4o` (opcional) |
+| `OPENAI_BACKUP_BASE_URL` | `https://opencode.ai/zen/v1` |
+| `OPENAI_BACKUP_API_KEY` | Key de [opencode.ai/auth](https://opencode.ai/auth) (alias `OPENCODE_API_KEY`) |
+| `OPENAI_BACKUP_MODEL` | `deepseek-v4-flash` (soporta `response_format` / structured outputs) |
+
+Nota: en Zen, GPT/Claude suelen ir por `/responses` o `/messages`; el backup de OpsFlow usa **chat completions**, por eso el default es DeepSeek Flash.
 
 Cliente: `src/server/ai/client.ts` + failover en `generateStructured`. Los fallbacks se registran como `ai.generate.fallback`.
 

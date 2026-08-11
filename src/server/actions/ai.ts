@@ -81,7 +81,7 @@ export async function getAIInsight(
   if (!isAiConfigured()) {
     return {
       data: null,
-      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY)",
+      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY|OPENCODE_API_KEY)",
     };
   }
 
@@ -174,7 +174,7 @@ export async function generateFromAI(
   if (!isAiConfigured()) {
     return {
       data: null,
-      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY)",
+      error: "IA no configurada (OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_BACKUP_API_KEY|OPENCODE_API_KEY)",
     };
   }
 
