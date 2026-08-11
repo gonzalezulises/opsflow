@@ -38,7 +38,7 @@ import { getDiagnosticResponses } from "@/server/actions/diagnostic";
 import { getInitiatives } from "@/server/actions/prioritization";
 import { getCase } from "@/server/actions/cases";
 import { requireCaseInOrganization } from "@/server/auth/guards";
-import { getModel } from "@/server/ai/client";
+import { getModel, isAiConfigured } from "@/server/ai/client";
 import { assertAiRateLimit, assertOrgAiVolumeLimit, recordAiInteraction } from "@/server/ai/rate-limit";
 import { logServerJson } from "@/lib/server-log";
 
@@ -78,8 +78,11 @@ export async function getAIInsight(
   context: string,
   caseId: string,
 ): Promise<{ data: unknown; error: string | null }> {
-  if (!process.env.OPENAI_API_KEY) {
-    return { data: null, error: "API key de OpenAI no configurada" };
+  if (!isAiConfigured()) {
+    return {
+      data: null,
+      error: "IA no configurada (OPENAI_BASE_URL o OPENAI_API_KEY)",
+    };
   }
 
   const gate = await requireCaseInOrganization(caseId);
@@ -159,8 +162,11 @@ export async function generateFromAI(
   caseId: string,
   actionType: "risk_generation" | "initiative_generation" | "action_plan_generation"
 ): Promise<{ data: unknown; error: string | null }> {
-  if (!process.env.OPENAI_API_KEY) {
-    return { data: null, error: "API key de OpenAI no configurada" };
+  if (!isAiConfigured()) {
+    return {
+      data: null,
+      error: "IA no configurada (OPENAI_BASE_URL o OPENAI_API_KEY)",
+    };
   }
 
   const gate = await requireCaseInOrganization(caseId);

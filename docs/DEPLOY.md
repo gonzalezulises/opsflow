@@ -61,8 +61,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 DATABASE_URL=postgresql://postgres:xxx@db.xxx.supabase.co:5432/postgres
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o
+# LLM en DGX Spark (vLLM gemma4 vía Tailscale Funnel + Caddy)
+OPENAI_BASE_URL=https://spark-279e.tail0b36db.ts.net/llm-api/v1
+OPENAI_API_KEY=<Bearer del Caddy /llm-api>
+OPENAI_MODEL=gemma4
 APP_URL=http://localhost:3000
 ```
 
@@ -103,8 +105,9 @@ En Vercel Dashboard > Settings > Environment Variables, agregar:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Production, Preview, Development |
 | `SUPABASE_SERVICE_ROLE_KEY` | Production, Preview |
 | `DATABASE_URL` | Production, Preview |
-| `OPENAI_API_KEY` | Production, Preview |
-| `OPENAI_MODEL` | Production, Preview |
+| `OPENAI_BASE_URL` | Production, Preview (Spark Funnel `/llm-api/v1`) |
+| `OPENAI_API_KEY` | Production, Preview (Bearer Caddy `/llm-api`) |
+| `OPENAI_MODEL` | Production, Preview (`gemma4`) |
 | `APP_URL` | Production (URL del dominio) |
 
 ## 5. Configurar dominio (opcional)

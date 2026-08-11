@@ -7,6 +7,18 @@
 3. **Server-side only.** El API key nunca llega al cliente.
 4. **Transparencia.** El usuario siempre sabe cuándo un contenido fue generado por IA.
 
+## Runtime LLM (DGX Spark)
+
+OpsFlow usa el SDK de OpenAI contra un endpoint **OpenAI-compatible**. Por defecto apunta a **vLLM en la DGX Spark** (`gemma4`):
+
+| Variable | Valor típico |
+|----------|----------------|
+| `OPENAI_BASE_URL` | `https://spark-279e.tail0b36db.ts.net/llm-api/v1` (Funnel → Caddy → vLLM `:8000`) |
+| `OPENAI_API_KEY` | Bearer del handle Caddy `/llm-api` (también vale `local` si llamás directo a `:8000` en red privada) |
+| `OPENAI_MODEL` | `gemma4` |
+
+Cliente: `src/server/ai/client.ts` (`baseURL` + modelo). Sin `OPENAI_BASE_URL`, el SDK usa la API cloud de OpenAI si hay key.
+
 ## Módulos con asistencia IA
 
 | Módulo | AI Action Type | Descripción |
@@ -193,7 +205,7 @@ IA genera sugerencia → UI muestra borrador → Usuario revisa → Usuario conf
 
 ### 2. Structured outputs
 
-OpenAI structured outputs + validación Zod garantizan que la respuesta sea parseable. Si la respuesta no cumple el schema, se muestra un error genérico al usuario.
+Structured outputs (SDK OpenAI + vLLM/`response_format`) + validación Zod garantizan que la respuesta sea parseable. Si la respuesta no cumple el schema, se muestra un error genérico al usuario.
 
 ### 3. Rate limiting
 
