@@ -11,6 +11,7 @@ export type AiProvider = {
 
 const OPENCODE_ZEN_BASE_URL = "https://opencode.ai/zen/v1";
 const DEFAULT_OPENCODE_MODEL = "deepseek-v4-flash";
+const AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1";
 
 let _primary: OpenAI | null = null;
 let _backup: OpenAI | null = null;
@@ -18,6 +19,11 @@ let _backup: OpenAI | null = null;
 function trimEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value ? value : undefined;
+}
+
+/** AI Gateway API key (routes through Vercel AI Gateway when set). */
+function getAiGatewayApiKey(): string | undefined {
+  return trimEnv("AI_GATEWAY_API_KEY");
 }
 
 /** Spark / OpenAI-compatible primary endpoint (OPENAI_BASE_URL). */
@@ -70,8 +76,10 @@ export function getOpenAIClient(): OpenAI {
 
 function getPrimaryClient(): OpenAI {
   if (!_primary) {
-    const baseURL = getPrimaryBaseUrl();
+    const gatewayKey = getAiGatewayApiKey();
+    const baseURL = gatewayKey ? AI_GATEWAY_BASE_URL : getPrimaryBaseUrl();
     const apiKey =
+      gatewayKey ||
       getPrimaryApiKey() ||
       // vLLM / OpenAI-compatible local servers often ignore the key but the SDK requires one.
       (baseURL ? "local" : undefined);
@@ -88,10 +96,14 @@ function getBackupClient(): OpenAI | null {
   const apiKey = getBackupApiKey();
   if (!apiKey) return null;
   if (!_backup) {
-    // Explicit base URL: SDK would otherwise inherit process.env.OPENAI_BASE_URL (Spark).
+    const gatewayKey = getAiGatewayApiKey();
+    // When using AI Gateway, route backup through it; otherwise explicit base URL.
+    const baseURL = gatewayKey ? AI_GATEWAY_BASE_URL : getBackupBaseUrl();
+    const effectiveKey = gatewayKey || apiKey;
+    
     _backup = new OpenAI({
-      apiKey,
-      baseURL: getBackupBaseUrl(),
+      apiKey: effectiveKey,
+      baseURL,
     });
   }
   return _backup;
@@ -99,18 +111,24 @@ function getBackupClient(): OpenAI | null {
 
 /**
  * Ordered providers: Spark (primary) first, then OpenCode Zen backup.
+ * When AI_GATEWAY_API_KEY is set, routes all calls through Vercel AI Gateway.
  */
 export function getAiProviders(): AiProvider[] {
   const providers: AiProvider[] = [];
   const primaryBase = getPrimaryBaseUrl();
   const primaryKey = getPrimaryApiKey();
+  const gatewayKey = getAiGatewayApiKey();
 
-  if (primaryBase || primaryKey) {
+  if (gatewayKey || primaryBase || primaryKey) {
     providers.push({
       kind: "primary",
       client: getPrimaryClient(),
       model: getPrimaryModel(),
-      label: primaryBase ? `spark:${getPrimaryModel()}` : `openai:${getPrimaryModel()}`,
+      label: gatewayKey
+        ? `gateway:${getPrimaryModel()}`
+        : primaryBase
+          ? `spark:${getPrimaryModel()}`
+          : `openai:${getPrimaryModel()}`,
     });
   }
 
@@ -120,7 +138,7 @@ export function getAiProviders(): AiProvider[] {
       kind: "backup",
       client: backup,
       model: getBackupModel(),
-      label: `opencode:${getBackupModel()}`,
+      label: gatewayKey ? `gateway:${getBackupModel()}` : `opencode:${getBackupModel()}`,
     });
   }
 
