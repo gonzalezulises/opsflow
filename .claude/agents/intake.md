@@ -27,6 +27,10 @@ that, scoped so it can land as one small pull request.
 
 ## Decide
 
+OpsFlow is a web tool for Lean/Six Sigma operational diagnosis (VSM, waste,
+risks, prioritization, action plans, AI-assisted reports) used by facilitators
+and teams in bootcamps; it replaces an Excel toolkit. See `docs/PRODUCT_SCOPE.md`.
+
 - **ACCEPT** when the request is clear, fits the project, and can be built and
   reviewed as one pull request. If it is too big, accept a smaller first slice
   that is useful on its own, and say what you left out. If it is vague but the

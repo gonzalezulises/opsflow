@@ -4,9 +4,13 @@
 set -euo pipefail
 
 npm ci --prefer-offline --no-audit --no-fund
-# Dependency cooldown (2 days); the script lives on the factory's machine.
-age=~/.agents/skills/parche-flota/scripts/edad-lock.py
-if [ -f "$age" ]; then python3 "$age" . 2; fi
+# Dependency cooldown: fail on any locked version under 2 days old or undated.
+age_out=$(python3 ~/.agents/skills/parche-flota/scripts/edad-lock.py . 2)
+echo "$age_out"
+if ! grep -q '; 0 con menos de' <<<"$age_out" || grep -q 'sin fecha' <<<"$age_out"; then
+  echo "dependency cooldown: young or undated versions in package-lock.json" >&2
+  exit 1
+fi
 npm run lint
 npm run typecheck
 npm run test

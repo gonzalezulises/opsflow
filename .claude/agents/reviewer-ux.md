@@ -46,8 +46,9 @@ never kill by process name.
 
 - The flow does what the spec promises, with no dead ends.
 - Loading, empty and error states exist and say something useful.
-- Each kind of user the change affects (signed out, signed in, different roles)
-  gets a sensible path, following the patterns the app already uses.
+- Each kind of user the change affects (signed out, facilitators and team
+  members, and the roles in `docs/adr/004-auth-and-roles.md`) gets a sensible
+  path, following the patterns the app already uses. The UI is in Spanish.
 - The copy is short, plain and consistent with the rest of the app.
 - Accessibility: real buttons and links, labels, focus order, keyboard use, and
   alt text.

@@ -31,6 +31,13 @@ is in the main checkout; your one file goes there.
 
 ## What to look for
 
+In OpsFlow: Supabase Auth (magic link and Google OAuth) and roles stored in
+`organization_members` (`docs/adr/004-auth-and-roles.md`). Every server action
+in `src/server/actions/` must check the caller's organization and role before
+reading or writing a case. Postgres RLS is described in `docs/RLS_STRATEGY.md`;
+case data sent to OpenAI from `src/server/ai/` is customer data, and user text
+placed in prompts is untrusted.
+
 - **Access control**: every new or changed endpoint, handler or query checks who
   the caller is and that they own what they touch. Database or storage rules
   that open data to the wrong readers.
