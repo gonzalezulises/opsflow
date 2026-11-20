@@ -45,3 +45,12 @@ Seed en `src/server/db/seeds/index.ts`.
 ## Modos VSM
 - `lean_correct` (default): valor = solo pasos con addsValue=true
 - `compatibility`: valor = todo el tiempo de proceso (legado Excel)
+
+## Software factory
+- `/factory run` procesa los issues con label `factory`: intake → spec → builder (Claude) → `factory/checks.sh` → revisión → aprobación → merge.
+- Auditor: Codex (`factory/bin/codex-review`) revisa código y seguridad y decide APPROVE/ESCALATE. UX y UI las revisa Claude con navegador.
+- Escala a Ulises (label `factory:needs-human`) solo lo que lista `.claude/agents/approver.md`; lo demás se fusiona solo.
+- `factory/checks.sh` corre lo mismo que `.github/workflows/ci.yml` (`npm ci`, `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`) más el cooldown de 2 días de dependencias, que solo está en el gate local. Si cambia el CI, cambia también `checks.sh`.
+- Estado local en `factory/jobs/` y worktrees en `.worktrees/` (ignorados por git, ESLint, tsc y Vitest).
+- Preparar un worktree: `npm ci`; las variables están en `.env.example` (el build basta con los placeholders de `factory/checks.sh`). Servidor en el puerto asignado: `npm run dev -- -p <port>`.
+- El costo por job que muestra el dashboard es solo el de Claude; las auditorías de Codex no se cuentan.

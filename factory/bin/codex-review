@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Run one audit lens with Codex instead of a Claude agent.
+
+Usage: codex-review <job-id> <lens>              lens: code | security | approver
+       codex-review <job-id> <lens> --escalate   after a second failure: write an
+                                                 ESCALATE decision.md so the job can go to needs-human
+
+The builder is Claude, so the audit is Codex: whoever builds doesn't audit.
+The prompt is the lens's agent file (.claude/agents/reviewer-<lens>.md or
+approver.md) from the main checkout, so a branch can't rewrite its auditor.
+Codex runs read-only in the job's worktree and returns the file's content as
+its last message; this script writes it to round-N/review-<lens>.md or
+decision.md and prints its first line. One Codex at a time (a lock): parallel
+runs rotate the shared token and hang. A failure writes only codex-<lens>.err and exits 1.
+"""
+
+import fcntl
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+FACTORY = Path(__file__).resolve().parents[1]
+REPO = FACTORY.parent
+CONFIG = json.loads((FACTORY / "config.json").read_text())
+BASE = CONFIG["base_branch"]
+TIMEOUT = CONFIG.get("codex_timeout_seconds", 900)
+LOCK = FACTORY / "jobs" / ".codex.lock"  # flock file
+VERDICT = {"approver": re.compile(r"^(APPROVE|ESCALATE)$"),
+           "default": re.compile(r"^VERDICT: (PASS|CHANGES)$")}
+
+
+def die(msg):
+    print(f"codex-review: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def acquire_lock():
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(LOCK, os.O_CREAT | os.O_RDWR)
+    deadline = time.time() + TIMEOUT * 3
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released by the OS if we die
+            return fd
+        except BlockingIOError:
+            if time.time() > deadline:
+                die("timed out waiting for another Codex run")
+            time.sleep(5)
+
+
+def escalate(job_dir, job_id, lens):
+    err = job_dir / f"codex-{lens}.err"
+    why = err.read_text().strip() if err.exists() else "no error was recorded"
+    (job_dir / "decision.md").write_text(
+        "ESCALATE\n\n## Summary\n"
+        f"- Codex failed the {lens} audit twice, so nobody audited this round.\n"
+        "- Nothing was merged.\n\n## For the human\n"
+        f"Review the PR yourself, or rerun `factory/bin/codex-review {job_id} {lens}` "
+        "and then give feedback with `/factory`.\n\nLast Codex error:\n\n```\n" + why + "\n```\n")
+    print("ESCALATE")
+
+
+def main(argv):
+    give_up = argv[2:] == ["--escalate"]
+    if len(argv) - give_up != 2 or argv[1] not in {"code", "security", "approver"}:
+        die("usage: codex-review <job-id> code|security|approver [--escalate]")
+    job_id, lens = argv[:2]
+    job_dir = FACTORY / "jobs" / job_id
+    if give_up:
+        return escalate(job_dir, job_id, lens)
+    err_file = job_dir / f"codex-{lens}.err"
+    job = json.loads((job_dir / "job.json").read_text())
+    worktree = REPO / ".worktrees" / job_id
+    n = job["round"]
+    agent = REPO / ".claude" / "agents" / ("approver.md" if lens == "approver" else f"reviewer-{lens}.md")
+    target = job_dir / "decision.md" if lens == "approver" else job_dir / f"round-{n}" / f"review-{lens}.md"
+    body = agent.read_text().split("---", 2)[2].strip()  # drop the frontmatter
+    header = (f"Job: {job_id}. Job folder: {job_dir}/. Main checkout: {REPO}. Worktree: {worktree}. "
+              f"Branch: {job['branch']}. Base: origin/{BASE}. Issue: #{job['issue']}. "
+              + (f"PR: #{job['pr']}. Final round: {n}." if lens == "approver" else f"Review round {n}."))
+    prompt = (f"{header}\n\n{body}\n\n## How this run differs\n"
+              f"You run in a read-only sandbox and cannot write files. Don't try to write {target}. "
+              "Instead, make your final message the complete content of that file, nothing before or "
+              "after it, starting with the required first line.")
+
+    def fail(msg):
+        err_file.write_text(msg + "\n")
+        die(msg)
+
+    lock = acquire_lock()
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as out:
+            out_path = out.name
+        try:
+            res = subprocess.run(
+                ["codex", "exec", "--sandbox", "read-only", "--ephemeral", "-C", str(worktree),
+                 "-o", out_path, "-"],
+                input=prompt, capture_output=True, text=True, timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            fail(f"Codex didn't finish in {TIMEOUT}s")
+        text = Path(out_path).read_text().strip() if Path(out_path).exists() else ""
+        os.unlink(out_path)
+    finally:
+        os.close(lock)
+
+    if res.returncode != 0:
+        fail(f"codex exited {res.returncode}: {res.stderr.strip()[-500:]}")
+    first = text.splitlines()[0].strip() if text else ""
+    if not VERDICT.get(lens, VERDICT["default"]).match(first):
+        fail(f"Codex's answer doesn't start with a verdict: {first[:120]!r}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text + "\n")
+    print(first)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
