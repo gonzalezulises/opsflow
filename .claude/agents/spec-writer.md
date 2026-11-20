@@ -52,6 +52,9 @@ Numbered list. Each criterion is one observable behaviour plus how to verify it:
 a command to run, a page and what it should show, or a file that should contain
 something. The builder tests against this list and the approver checks it, so
 every item must be checkable by someone who only has the repo.
+In OpsFlow the factory has no Supabase credentials or signed-in session, so a
+page behind login can't be walked in a browser: verify that behaviour with an
+automated test that runs in `npm run test` instead.
 
 ## Out of scope
 What a reasonable builder might be tempted to do but must not, including
