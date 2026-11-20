@@ -1,0 +1,19 @@
+{
+  "sandbox": {
+    "enableWeakerNetworkIsolation": true,
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+        "github.com",
+        "api.github.com",
+        "*.githubusercontent.com"
+      ]
+    },
+    "filesystem": {
+      "allowWrite": [".git", "~/.npm"]
+    },
+    "excludedCommands": ["factory/bin/codex-review *"]
+  }
+}
