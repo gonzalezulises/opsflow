@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { assignUserToCase, unassignUserFromCase } from "@/server/actions/org-members";
@@ -31,13 +31,8 @@ export function CaseAssignmentsBar({
   canManage: boolean;
 }) {
   const router = useRouter();
-  const [assignees, setAssignees] = useState(initialAssignees);
   const [email, setEmail] = useState("");
   const [pending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setAssignees(initialAssignees);
-  }, [initialAssignees]);
 
   function handleAssign(e: React.FormEvent) {
     e.preventDefault();
@@ -73,7 +68,7 @@ export function CaseAssignmentsBar({
     });
   }
 
-  if (!canManage && assignees.length === 0) {
+  if (!canManage && initialAssignees.length === 0) {
     return null;
   }
 
@@ -87,9 +82,9 @@ export function CaseAssignmentsBar({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {assignees.length > 0 ? (
+        {initialAssignees.length > 0 ? (
           <ul className="divide-y rounded-md border text-sm">
-            {assignees.map((a) => (
+            {initialAssignees.map((a) => (
               <li
                 key={a.userId}
                 className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
