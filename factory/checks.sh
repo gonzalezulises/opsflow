@@ -4,6 +4,9 @@
 set -euo pipefail
 
 npm ci --prefer-offline --no-audit --no-fund
+# Dependency cooldown (2 days); the script lives on the factory's machine.
+age=~/.agents/skills/parche-flota/scripts/edad-lock.py
+if [ -f "$age" ]; then python3 "$age" . 2; fi
 npm run lint
 npm run typecheck
 npm run test

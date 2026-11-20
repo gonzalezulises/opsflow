@@ -133,13 +133,16 @@ the same map, prompt `<header> Review round <N>.` plus the port for `ux` and
 run `factory/bin/codex-review <id> <r>` with Bash in the background (it audits
 with Codex, writes `review-<r>.md` and prints its first line; Codex runs queue
 behind one lock). If it exits non-zero, run it once more; if it fails again,
-`factory/bin/job advance <id> needs-human` and tell the user why. **WAIT FOR ALL.** Each time one finishes, run
+run `factory/bin/codex-review <id> <r> --escalate` (it writes an ESCALATE
+`decision.md`), stop the job's other reviewers, then
+`factory/bin/job advance <id> needs-human`. **WAIT FOR ALL.** Each time one finishes, run
 `factory/bin/job sync <id>` so the dashboard fills in. When every reviewer has
 finished:
 
 - all PASS: `factory/bin/job advance <id> approve`, then run
   `factory/bin/codex-review <id> approver` with Bash in the background: the
-  approver is Codex, not a Claude agent. Same retry rule as the reviewers.
+  approver is Codex, not a Claude agent. If it fails twice, run it with
+`--escalate`, then `factory/bin/job advance <id> needs-human`.
 - any CHANGES: `factory/bin/job advance <id> build` (or `needs-human` when it
   refuses because this was the last round), then resume the builder:
   `Round <N-1> reviews are in round-<N-1>/. Address every VERDICT: CHANGES, push, and update build.md for round <N>.`

@@ -54,8 +54,11 @@ ESCALATE if any of them fails, or if the change:
 
 In this repo that includes anything under `src/server/db/` (schema, migrations,
 seeds), `src/app/api/migrate/`, `src/app/api/seed/`, `src/app/auth/`,
-`src/lib/supabase/`, `supabase/`, `.github/`, `next.config.ts`, and any change
-that adds a new dependency to `package.json` (bumping an existing one is fine once the gate passes).
+`src/lib/supabase/`, `supabase/`, `.github/`, `next.config.ts`; anything that
+changes which external service receives customer data (the AI provider in
+`src/server/ai/`, any new outbound API); a new dependency in `package.json`;
+and a major-version bump of an existing one. Patch and minor bumps of existing
+dependencies may merge once the gate passes (it rejects versions under 2 days old).
 
 ## Write decision.md
 

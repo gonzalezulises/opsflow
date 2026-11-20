@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Software factory worktrees: copies of other branches.
+    ".worktrees/**",
     // Node CommonJS helpers (CI / ops); not App Router TS.
     "scripts/**/*.cjs",
   ]),

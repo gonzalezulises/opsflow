@@ -458,6 +458,10 @@ def advance(job, stage):
             else:
                 next_round(job)
 
+    elif old == "review" and stage == "needs-human" and first_line(d / "decision.md") == "ESCALATE" \
+            and (d / "decision.md").stat().st_mtime > (round_dir(job) / "checks.md").stat().st_mtime:
+        pass  # codex-review --escalate: an audit couldn't run this round
+
     elif old == "review":
         check_reviews_done(job)
         changes = [r for r, v in job["reviews"].items() if v == "CHANGES"]
