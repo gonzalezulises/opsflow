@@ -45,3 +45,10 @@ Seed en `src/server/db/seeds/index.ts`.
 ## Modos VSM
 - `lean_correct` (default): valor = solo pasos con addsValue=true
 - `compatibility`: valor = todo el tiempo de proceso (legado Excel)
+
+## Software factory
+- `/factory run` procesa los issues con label `factory`: intake → spec → builder (Claude) → `factory/checks.sh` → revisión → aprobación → merge.
+- Auditor: Codex (`factory/bin/codex-review`) revisa código y seguridad y decide APPROVE/ESCALATE. UX y UI las revisa Claude con navegador.
+- Escala a Ulises (label `factory:needs-human`) solo lo que lista `.claude/agents/approver.md`; lo demás se fusiona solo.
+- `factory/checks.sh` replica `.github/workflows/ci.yml`; si cambia uno, cambia el otro.
+- Estado local en `factory/jobs/` y worktrees en `.worktrees/` (ignorados por git).

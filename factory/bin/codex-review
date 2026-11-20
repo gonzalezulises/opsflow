@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""Run one audit lens with Codex instead of a Claude agent.
+
+Usage: codex-review <job-id> <lens>      lens: code | security | approver
+
+The builder is Claude, so the audit is Codex: whoever builds doesn't audit.
+The prompt is the lens's agent file (.claude/agents/reviewer-<lens>.md or
+approver.md) from the main checkout, so a branch can't rewrite its auditor.
+Codex runs read-only in the job's worktree and returns the file's content as
+its last message; this script writes it to round-N/review-<lens>.md or
+decision.md and prints its first line. One Codex at a time (a lock): parallel
+runs rotate the shared token and hang. Any failure writes nothing and exits 1.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+FACTORY = Path(__file__).resolve().parents[1]
+REPO = FACTORY.parent
+CONFIG = json.loads((FACTORY / "config.json").read_text())
+BASE = CONFIG["base_branch"]
+TIMEOUT = CONFIG.get("codex_timeout_seconds", 900)
+LOCK = FACTORY / "jobs" / ".codex.lock"
+VERDICT = {"approver": re.compile(r"^(APPROVE|ESCALATE)$"),
+           "default": re.compile(r"^VERDICT: (PASS|CHANGES)$")}
+
+
+def die(msg):
+    print(f"codex-review: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def acquire_lock():
+    deadline = time.time() + TIMEOUT * 3
+    while True:
+        try:
+            os.mkdir(LOCK)
+            (LOCK / "pid").write_text(str(os.getpid()))
+            return
+        except FileExistsError:
+            try:
+                os.kill(int((LOCK / "pid").read_text()), 0)
+            except (OSError, ValueError):  # holder died: take the stale lock
+                subprocess.run(["rm", "-rf", str(LOCK)])
+                continue
+            if time.time() > deadline:
+                die("timed out waiting for another Codex run")
+            time.sleep(5)
+
+
+def main(argv):
+    if len(argv) != 2 or argv[1] not in {"code", "security", "approver"}:
+        die("usage: codex-review <job-id> code|security|approver")
+    job_id, lens = argv
+    job_dir = FACTORY / "jobs" / job_id
+    job = json.loads((job_dir / "job.json").read_text())
+    worktree = REPO / ".worktrees" / job_id
+    n = job["round"]
+    agent = REPO / ".claude" / "agents" / ("approver.md" if lens == "approver" else f"reviewer-{lens}.md")
+    target = job_dir / "decision.md" if lens == "approver" else job_dir / f"round-{n}" / f"review-{lens}.md"
+    body = agent.read_text().split("---", 2)[2].strip()  # drop the frontmatter
+    header = (f"Job: {job_id}. Job folder: {job_dir}/. Main checkout: {REPO}. Worktree: {worktree}. "
+              f"Branch: {job['branch']}. Base: origin/{BASE}. Issue: #{job['issue']}. "
+              + (f"PR: #{job['pr']}. Final round: {n}." if lens == "approver" else f"Review round {n}."))
+    prompt = (f"{header}\n\n{body}\n\n## How this run differs\n"
+              f"You run in a read-only sandbox and cannot write files. Don't try to write {target}. "
+              "Instead, make your final message the complete content of that file, nothing before or "
+              "after it, starting with the required first line.")
+
+    acquire_lock()
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as out:
+            out_path = out.name
+        try:
+            res = subprocess.run(
+                ["codex", "exec", "--sandbox", "read-only", "--ephemeral", "-C", str(worktree),
+                 "-o", out_path, "-"],
+                input=prompt, capture_output=True, text=True, timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            die(f"Codex didn't finish in {TIMEOUT}s")
+        text = Path(out_path).read_text().strip() if Path(out_path).exists() else ""
+        os.unlink(out_path)
+    finally:
+        subprocess.run(["rm", "-rf", str(LOCK)])
+
+    if res.returncode != 0:
+        die(f"codex exited {res.returncode}: {res.stderr.strip()[-500:]}")
+    first = text.splitlines()[0].strip() if text else ""
+    if not VERDICT.get(lens, VERDICT["default"]).match(first):
+        die(f"Codex's answer doesn't start with a verdict: {first[:120]!r}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text + "\n")
+    print(first)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
