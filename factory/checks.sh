@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The repo's checks: the same steps as .github/workflows/ci.yml.
+# The repo's checks: the steps of .github/workflows/ci.yml plus a dependency cooldown.
 # The gate runs this from the main checkout with the job's worktree as cwd.
 set -euo pipefail
 
