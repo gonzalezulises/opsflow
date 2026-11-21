@@ -86,6 +86,9 @@ def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base
             raise_to("D", f"{path}: control de la fábrica")
         elif matches(path, config["classes"]["C"]):
             raise_to("C", f"{path}: ruta sensible")
+    scripts = lambda text: json.loads(text).get("scripts", {}) if text else {}
+    if scripts(base_pkg) != scripts(head_pkg):  # checks.sh runs these: changing them changes the checks
+        raise_to("D", "package.json: cambian los scripts que corren las verificaciones")
     added, bumped, unreadable = dep_changes(base_pkg, head_pkg, base_lock, head_lock)
     for name in added:
         raise_to("C", f"dependencia nueva: {name}")
@@ -149,7 +152,9 @@ def _self_test():
     assert classify(["package.json"], config, "A", pkg({}),
                     json.dumps({"optionalDependencies": {"x": "1.0.0"}}))[0] == "C"  # audit round 2
     assert classify(["package.json"], config, "A", json.dumps({"scripts": {}}),
-                    json.dumps({"scripts": {"postinstall": "node x.js"}}))[0] == "C"
+                    json.dumps({"scripts": {"postinstall": "node x.js"}}))[0] == "D"
+    assert classify(["package.json"], config, "A", json.dumps({"scripts": {"test": "vitest run"}}),
+                    json.dumps({"scripts": {"test": "true"}}))[0] == "D"  # audit round 3
     lock = lambda v: json.dumps({"packages": {"node_modules/a": {"version": v}}})
     assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.0.0"}),
                     lock("1.4.0"), lock("2.0.0"))[0] == "C"  # the lockfile resolved a new major

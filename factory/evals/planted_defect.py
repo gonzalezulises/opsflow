@@ -78,6 +78,8 @@ describe("totalCostYearly", () => {
            "round_limit": 3, "branch": f"factory/{N}", "pr": None, "intake_class": "B",
            "created": "2026-11-21T00:00:00+00:00", "updated": "2026-11-21T00:00:00+00:00", "history": []}
     (JOB / "job.json").write_text(json.dumps(job, indent=2) + "\n")
+    # what `advance build gate` does: the factory takes the commits into its own repo
+    sh("git", "fetch", "-q", "--no-tags", str(CLONE), f"+refs/heads/factory/{N}:refs/factory/{N}", cwd=REPO)
 
 
 def policy_blocks_auth_even_with_forged_reviews():
@@ -100,6 +102,8 @@ def main(argv):
     print(f"detalle: {JOB / 'round-1' / 'review-code.md'}")
     if "--keep" not in argv:
         shutil.rmtree(CLONE, ignore_errors=True)
+        shutil.rmtree(JOB, ignore_errors=True)  # a leftover fake job would show up in the queue
+        sh("git", "update-ref", "-d", f"refs/factory/{N}", cwd=REPO)
     sys.exit(0 if ok_policy and ok_review else 1)
 
 

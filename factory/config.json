@@ -22,7 +22,11 @@
       "lefthook.yml",
       ".lefthook*",
       ".npmrc",
-      ".gitattributes"
+      "*.gitattributes",
+      "vitest.config.*",
+      "eslint.config.*",
+      "tsconfig.json",
+      "postcss.config.*"
     ],
     "C": [
       "src/server/auth/*",

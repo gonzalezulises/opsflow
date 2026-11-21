@@ -68,6 +68,11 @@ def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# Lock fds every child inherits: if this process dies, the job stays locked
+# until its last orphan exits, so a new run can't work on top of one.
+HELD_LOCKS = ()
+
+
 def kill_group(pid):
     try:
         os.killpg(pid, signal.SIGKILL)
@@ -83,7 +88,7 @@ def run(cmd, cwd=None, check=True, stdin=None, timeout=None, env=None, binary=Fa
     """
     proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=not binary, env=env,
-                            start_new_session=True)
+                            start_new_session=True, pass_fds=HELD_LOCKS)
     try:
         out, err = proc.communicate(stdin, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -145,22 +150,45 @@ def git(n, *args, check=True):
     return run([*GIT, *args], cwd=clone(n), check=check).stdout.strip()
 
 
+# The builder's clone is untrusted, .git/config included (it could point `origin` at
+# a fake base). The factory takes only the commits from it, into its own repo, and
+# reads the base, the diff and the files there.
+
+def rgit(*args, check=True, binary=False):
+    res = run([*GIT, *args], cwd=REPO, check=check, binary=binary)
+    return res.stdout if binary else res.stdout.strip()
+
+
+def ref(n):
+    return f"refs/factory/{n}"
+
+
+def import_job(n):
+    """Copy the job branch's commits from the clone into the factory's repo; return the sha."""
+    branch = load(n)["branch"]
+    rgit("fetch", "-q", "--no-tags", "--no-write-fetch-head", str(clone(n)), f"+refs/heads/{branch}:{ref(n)}")
+    return head(n)
+
+
 def head(n):
-    return git(n, "rev-parse", "HEAD")
+    return rgit("rev-parse", "--verify", f"{ref(n)}^{{commit}}")
+
+
+def base_sync():
+    rgit("fetch", "-q", "origin", BASE)
+    return f"origin/{BASE}"
 
 
 def changed(n):
     """Every path the change adds, modifies or deletes; a rename counts as both ends."""
-    git(n, "fetch", "-q", "origin", BASE)
-    out = run([*GIT, "diff", "--no-renames", "--name-only", "-z", f"origin/{BASE}...HEAD"], cwd=clone(n)).stdout
+    out = rgit("diff", "--no-renames", "--name-only", "-z", f"{base_sync()}...{head(n)}")
     return [p for p in out.split("\0") if p]
 
 
 def fingerprint(n):
     """Exact bytes of the job's own change. Any edit, even whitespace, makes reviews stale."""
-    diff = run([*GIT, "diff", "--binary", "--full-index", "--no-renames", f"origin/{BASE}...HEAD"],
-               cwd=clone(n)).stdout
-    return hashlib.sha256(diff.encode()).hexdigest() if diff else "empty"
+    diff = rgit("diff", "--binary", "--full-index", "--no-renames", f"{base_sync()}...{head(n)}", binary=True)
+    return hashlib.sha256(diff).hexdigest() if diff else "empty"
 
 
 def comment(kind, number, body):
@@ -292,11 +320,17 @@ def make_clone(job):
     git(n, "checkout", "-q", "-b", job["branch"], f"origin/{BASE}")
 
 
+def publish(job):
+    """Push the factory's copy of the job, never the clone: its config and hooks are the builder's."""
+    rgit("push", "-q", "--force", "origin", f"{ref(job['issue'])}:refs/heads/{job['branch']}")
+
+
 def push_and_pr(job):
     n = job["issue"]
     require(not git(n, "status", "--porcelain"), "el clon tiene cambios sin commitear")
+    import_job(n)
     require(changed(n), "el branch no tiene cambios respecto de la base")
-    git(n, "push", "-q", "-u", "origin", job["branch"])
+    publish(job)
     if not job["pr"]:  # a run cut after `gh pr create` left the PR without saving it: recover it
         found = json.loads(gh("pr", "list", "--head", job["branch"], "--base", BASE, "--state", "open",
                               "--json", "number"))
@@ -321,6 +355,17 @@ def to_human(job, why):
     else:
         comment("issue", job["issue"], f"### La fábrica necesita a una persona\n\n{why}")
     move(job, "needs-human", why.splitlines()[0][:80])
+
+
+def seal(job, name):
+    job.setdefault("sealed", {})[name] = hashlib.sha256((jdir(job["issue"]) / name).read_bytes()).hexdigest()
+
+
+def inputs_intact(job):
+    for name, h in job.get("sealed", {}).items():
+        f = jdir(job["issue"]) / name
+        require(f.exists() and hashlib.sha256(f.read_bytes()).hexdigest() == h,
+                f"{name} cambió después de su etapa: la evidencia ya no es confiable")
 
 
 def next_round(job):
@@ -354,6 +399,7 @@ def cmd_advance(n, stage):
         job["intake_class"] = m.group(1) if m else None
         if stage == "spec":
             require(m, "intake.md no tiene la línea `Class: A|B|C|D`")
+            seal(job, "intake.md")
             make_clone(job)
             comment("issue", n, f"La fábrica tomó este issue (clase {m.group(1)}).\n\n{summary}")
         elif stage == "needs-info":
@@ -373,6 +419,7 @@ def cmd_advance(n, stage):
     elif old == "spec":
         spec = (d / "spec.md").read_text() if (d / "spec.md").exists() else ""
         require("## Acceptance" in spec, "spec.md no tiene la sección `## Acceptance`")
+        seal(job, "spec.md")
         next_round(job)
 
     elif old == "build":
@@ -413,10 +460,10 @@ def cmd_advance(n, stage):
 
 
 # ---------- gate ----------
-# The gate never runs code in the builder's clone. It extracts the exact commit
-# (git archive: no .git, no hooks, no index tricks), runs the checks there with
-# no credentials and writes allowed only to its own folders, and checks that the
-# extracted files are byte-for-byte the commit afterwards.
+# The gate never runs code in the builder's clone. It writes the exact commit's
+# blobs from the factory's repo into a fresh folder (no .git, no hooks, no
+# export attributes), runs the checks there with no credentials, unable to write
+# any committed file or anything outside its folders.
 
 SECRET_ENV = re.compile(r"TOKEN|SECRET|KEY|PASSWORD|PASSWD|AUTH|CREDENTIAL|COOKIE|SESSION", re.I)
 
@@ -425,49 +472,88 @@ def gate_dirs(n):
     return CLONES / f"{n}-gate", CLONES / f"{n}-base"
 
 
-def extract(n, ref, dest):
-    """Write the files of `ref` into a fresh `dest`; return their names."""
+def extract(rev, dest):
+    """Write every blob of `rev` into a fresh `dest`, straight from the tree; return the paths."""
     shutil.rmtree(dest, ignore_errors=True)
     dest.mkdir(parents=True)
-    tar = run([*GIT, "archive", "--format=tar", ref], cwd=clone(n), binary=True).stdout
-    with tarfile.open(fileobj=io.BytesIO(tar)) as t:
-        t.extractall(dest, filter="data")
-    return [p for p in git(n, "ls-tree", "-r", "-z", "--name-only", ref).split("\0") if p]
+    entries = []
+    for item in rgit("ls-tree", "-r", "-z", "--full-tree", rev).split("\0"):
+        if not item:
+            continue
+        meta, path = item.split("\t", 1)
+        mode, kind, obj = meta.split()
+        if kind == "blob":
+            entries.append((mode, obj, path))
+    batch = run([*GIT, "cat-file", "--batch"], cwd=REPO, binary=True,
+                stdin=("\n".join(obj for _, obj, _ in entries) + "\n").encode()).stdout
+    pos = 0
+    for mode, obj, path in entries:
+        header_end = batch.index(b"\n", pos)
+        size = int(batch[pos:header_end].split()[2])
+        data = batch[header_end + 1:header_end + 1 + size]
+        pos = header_end + 1 + size + 1
+        target = dest / path
+        require(target.resolve().is_relative_to(dest.resolve()), f"ruta fuera del árbol: {path}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if mode == "120000":
+            link = data.decode()
+            require(not link.startswith("/") and (target.parent / link).resolve().is_relative_to(dest.resolve()),
+                    f"enlace simbólico que sale del árbol: {path}")
+            target.symlink_to(link)
+        else:
+            target.write_bytes(data)
+            if mode == "100755":
+                target.chmod(0o755)
+    return [path for _, _, path in entries]
 
 
 def digest(root, files):
     h = hashlib.sha256()
     for f in sorted(files):
         p = root / f
-        h.update(f.encode() + b"\0" + (p.read_bytes() if p.is_file() and not p.is_symlink() else b"<missing>"))
+        body = os.readlink(p).encode() if p.is_symlink() else p.read_bytes() if p.is_file() else b"<missing>"
+        h.update(f.encode() + b"\0" + body)
     return h.hexdigest()
 
 
-def confined(n, cmd):
-    """The job's code, unable to write outside its gate folders or to read credentials."""
+def confined(n, cmd, frozen=()):
+    """The job's code: no credentials, writes only inside its gate folders, never to a committed file."""
     home = Path.home().resolve()
     gate_dir, base_dir = (d.resolve() for d in gate_dirs(n))
     writable = [gate_dir, base_dir, Path("/private/tmp"), Path("/private/var/folders"),
                 home / ".npm", home / "Library/Caches", Path("/dev")]
     secrets = [home / ".config", home / ".codex", home / ".claude", home / ".ssh", home / ".aws",
                home / "Library/Keychains", home / ".git-credentials", home / ".netrc", REPO.resolve() / ".env"]
+    quote = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     profile = ("(version 1)(allow default)"
-               "(deny file-write*)(allow file-write* " + " ".join(f'(subpath "{p}")' for p in writable) + ")"
-               "(deny file-read* " + " ".join(f'(subpath "{p}")' for p in secrets) + ")"
+               "(deny file-write*)(allow file-write* " + " ".join(f'(subpath "{quote(p)}")' for p in writable) + ")"
+               + ("(deny file-write* " + " ".join(f'(literal "{quote(p)}")' for p in frozen) + ")" if frozen else "")
+               + "(deny file-read* " + " ".join(f'(subpath "{quote(p)}")' for p in secrets) + ")"
                '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))')
     # shortcut: macOS sandbox-exec only; the GitHub runner needs its own isolation.
     return ["sandbox-exec", "-p", profile, *cmd]
+
+
+def frozen_paths(root, files):
+    """Every committed file and the folders holding them: no write, rename or delete during the gate."""
+    root = root.resolve()
+    out = set()
+    for f in files:
+        p = root / f
+        out.add(p)
+        out.update(q for q in p.parents if q != root and q.is_relative_to(root))
+    return sorted(out)
 
 
 def clean_env():
     return {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k)}
 
 
-def confined_run(n, cmd, cwd, timeout):
-    return run(confined(n, cmd), cwd=cwd, check=False, timeout=timeout, env=clean_env())
+def confined_run(n, cmd, cwd, timeout, frozen=()):
+    return run(confined(n, cmd, frozen), cwd=cwd, check=False, timeout=timeout, env=clean_env())
 
 
-def acceptance(n, sha, gate_dir, paths, log):
+def acceptance(n, sha, gate_dir, files, paths, log):
     """PASS when the changed tests pass with the change and fail on the base. EXEMPT for deps/docs-only diffs."""
     if all(policy.matches(p, CONFIG["acceptance_exempt"]) for p in paths):
         return "EXEMPT", "solo dependencias o documentación"
@@ -475,15 +561,15 @@ def acceptance(n, sha, gate_dir, paths, log):
     if not tests:
         return "FAIL", "el cambio no agrega ni modifica ninguna prueba"
     cmd = CONFIG["acceptance_cmd"] + tests
-    with_change = confined_run(n, cmd, gate_dir, 900)
+    with_change = confined_run(n, cmd, gate_dir, 900, frozen_paths(gate_dir, files))
     log.append(f"$ {' '.join(cmd)}   (con el cambio)\n{with_change.stdout[-3000:]}{with_change.stderr[-2000:]}")
     if with_change.returncode != 0:
         return "FAIL", "las pruebas del cambio no pasan con el cambio"
     _, base_dir = gate_dirs(n)
-    extract(n, git(n, "merge-base", f"origin/{BASE}", sha), base_dir)
+    base_files = extract(rgit("merge-base", base_sync(), sha), base_dir)
     for t in tests:
         (base_dir / t).parent.mkdir(parents=True, exist_ok=True)
-        (base_dir / t).write_bytes(run([*GIT, "show", f"{sha}:{t}"], cwd=clone(n), binary=True).stdout)
+        (base_dir / t).write_bytes(rgit("show", f"{sha}:{t}", binary=True))
     lock = "package-lock.json"
     if (base_dir / lock).read_bytes() == (gate_dir / lock).read_bytes():
         (base_dir / "node_modules").symlink_to(gate_dir / "node_modules")
@@ -491,7 +577,7 @@ def acceptance(n, sha, gate_dir, paths, log):
         installed = confined_run(n, ["npm", "ci", "--prefer-offline", "--no-audit", "--no-fund"], base_dir, 900)
         if installed.returncode != 0:
             return "FAIL", "no se pudo instalar la base para comparar"
-    without = confined_run(n, cmd, base_dir, 900)
+    without = confined_run(n, cmd, base_dir, 900, frozen_paths(base_dir, base_files + tests))
     log.append(f"$ {' '.join(cmd)}   (sin el cambio)\n{without.stdout[-3000:]}{without.stderr[-2000:]}")
     if without.returncode == 0:
         return "FAIL", "las pruebas también pasan sin el cambio: no demuestran nada"
@@ -512,12 +598,12 @@ def run_gate(n):
     gate_dir, base_dir = gate_dirs(n)
     log = []
     try:
-        files = extract(n, sha, gate_dir)
+        files = extract(sha, gate_dir)
         before = digest(gate_dir, files)
-        checks = confined_run(n, ["bash", str(FACTORY / "checks.sh")], gate_dir, 1800)
+        checks = confined_run(n, ["bash", str(FACTORY / "checks.sh")], gate_dir, 1800, frozen_paths(gate_dir, files))
         log.append(f"$ factory/checks.sh\n{checks.stdout[-6000:]}{checks.stderr[-4000:]}")
         checks_v = "PASS" if checks.returncode == 0 else "FAIL"
-        acc_v, acc_note = (acceptance(n, sha, gate_dir, paths, log) if checks_v == "PASS"
+        acc_v, acc_note = (acceptance(n, sha, gate_dir, files, paths, log) if checks_v == "PASS"
                            else ("SKIPPED", "los checks fallaron"))
         if digest(gate_dir, files) != before:  # the code under test rewrote itself: what passed isn't the commit
             checks_v, acc_v, acc_note = "FAIL", "FAIL", "el código modificó sus propios archivos durante el gate"
@@ -579,31 +665,38 @@ def cmd_review(n, lens):
     target = d / "decision.md" if lens == "approver" else rd / f"review-{lens}.md"
     pattern = r"(APPROVE|ESCALATE)" if lens == "approver" else r"VERDICT: (PASS|CHANGES)"
     prompt = (FACTORY / "prompts" / f"{lens}.md").read_text()  # from the main checkout: a branch can't rewrite its auditor
-    header = (f"Issue #{n}. Carpeta del job: {d}/. Clon con el cambio: {clone(n)}. Branch: {job['branch']}. "
+    view = CLONES / f"{n}-review"
+    header = (f"Issue #{n}. Carpeta del job: {d}/. Checkout con el cambio: {view}. Branch: {job['branch']}. "
               f"Base: origin/{BASE}. Ronda {job['round']}.")
     full = (f"{header}\n\n{prompt}\n\nCorres en modo solo lectura. Tu último mensaje es el contenido "
             f"completo del archivo, empezando por la primera línea exigida, sin nada antes ni después.")
     fp_before = fingerprint(n)
+    sha = head(n)
+    rgit("worktree", "remove", "--force", str(view), check=False)
+    shutil.rmtree(view, ignore_errors=True)
+    rgit("worktree", "add", "-q", "--detach", str(view), sha)  # the factory's repo: its origin, its config
     lock = os.open(JOBS / ".codex.lock", os.O_CREAT | os.O_RDWR)
     fcntl.flock(lock, fcntl.LOCK_EX)  # one Codex at a time: parallel runs fight over the token
     out = rd / f"codex-{lens}.out"
     try:
-        res = run(["codex", "exec", "--sandbox", "read-only", "--ephemeral", "-C", str(clone(n)),
+        res = run(["codex", "exec", "--sandbox", "read-only", "--ephemeral", "-C", str(view),
                    "-o", str(out), "-"], stdin=full, check=False, timeout=CONFIG["codex_timeout_seconds"])
     except subprocess.TimeoutExpired:
         res = None
     finally:
         os.close(lock)
+        rgit("worktree", "remove", "--force", str(view), check=False)
     text = out.read_text().strip() if out.exists() else ""
     line = text.split("\n", 1)[0].strip()
     if res is None or res.returncode != 0 or not re.fullmatch(pattern, line):
         why = "tiempo agotado" if res is None else (res.stderr.strip()[-400:] or f"respuesta sin veredicto: {line[:80]!r}")
         (rd / f"codex-{lens}.err").write_text(why + "\n")
         raise Refused(f"Codex ({lens}) no dejó un veredicto: {why}")
-    require(fingerprint(n) == fp_before, "el cambio se modificó durante la revisión")
+    require(fingerprint(n) == fp_before and head(n) == sha, "el cambio se modificó durante la revisión")
+    inputs_intact(job)
     target.write_text(text + "\n")
     if lens == "approver":
-        (d / "decision.json").write_text(json.dumps({"fingerprint": fp_before, "sha": head(n),
+        (d / "decision.json").write_text(json.dumps({"fingerprint": fp_before, "sha": sha,
                                                      "verdict": line, "at": now()}) + "\n")
     else:
         stamp(job, lens, line)
@@ -625,14 +718,18 @@ def cmd_merge(n):
     job = load(n)
     require(job["stage"] == "approve", f"#{n} está en {job['stage']}, no en approve")
     require(first_line(jdir(n) / "decision.md") == "APPROVE", "decision.md no dice APPROVE")
-    git(n, "fetch", "-q", "origin", BASE)
-    synced = run([*GIT, "merge", "--no-edit", f"origin/{BASE}"], cwd=clone(n), check=False)
-    if synced.returncode != 0:
-        git(n, "merge", "--abort", check=False)
-        return to_human(job, f"El branch choca con {BASE}; hay que resolver el conflicto.")
+    inputs_intact(job)
+    base = base_sync()
+    sha = head(n)
+    if rgit("merge-base", base, sha) != rgit("rev-parse", base):  # the base moved: merge it in, in the factory's repo
+        tree = run([*GIT, "merge-tree", "--write-tree", base, sha], cwd=REPO, check=False)
+        if tree.returncode != 0:
+            return to_human(job, f"El branch choca con {BASE}; hay que resolver el conflicto.")
+        merged = rgit("commit-tree", tree.stdout.split()[0], "-p", sha, "-p", base, "-m", f"Merge {BASE} into {job['branch']}")
+        rgit("update-ref", ref(n), merged, sha)
     paths = changed(n)
-    at_base = lambda f: run([*GIT, "show", f"origin/{BASE}:{f}"], cwd=clone(n), check=False).stdout or None
-    at_head = lambda f: run([*GIT, "show", f"HEAD:{f}"], cwd=clone(n), check=False).stdout or None
+    at_base = lambda f: rgit("show", f"{base}:{f}", check=False) or None
+    at_head = lambda f: rgit("show", f"{head(n)}:{f}", check=False) or None
     cls, why = policy.classify(paths, CONFIG, job["intake_class"] or "C",
                                at_base("package.json"), at_head("package.json"),
                                at_base("package-lock.json"), at_head("package-lock.json"))
@@ -640,8 +737,7 @@ def cmd_merge(n):
     save(job)
     if cls not in policy.AUTO:
         return to_human(job, f"Clase {cls}: este cambio lo aprueba una persona.\n\n" + "\n".join(f"- {w}" for w in why))
-    # The sync may have moved HEAD: re-run the gate on the exact commit that would merge.
-    try:
+    try:  # the exact commit that would merge gets its own gate
         verdict = run_gate(n)
     except (Refused, subprocess.TimeoutExpired) as e:
         return to_human(load(n), f"El gate final no terminó: {e}")
@@ -651,7 +747,7 @@ def cmd_merge(n):
     blockers = policy.may_merge(cls, evidence(load(n)), current)
     if blockers:
         return to_human(load(n), "La política no permite fusionar:\n\n" + "\n".join(f"- {b}" for b in blockers))
-    git(n, "push", "-q", "origin", job["branch"])
+    publish(job)
     gh("pr", "ready", str(job["pr"]), check=False)
     try:
         gh("pr", "merge", str(job["pr"]), f"--{CONFIG['merge_method']}", "--delete-branch",
@@ -749,8 +845,11 @@ def main(argv):
         controls_intact()
     if args and args[0].isdigit():  # one mutation per job at a time, even across overlapping runs
         jdir(int(args[0])).mkdir(parents=True, exist_ok=True)
+        global HELD_LOCKS
         lock = open(jdir(int(args[0])) / ".lock", "w")
         fcntl.flock(lock, fcntl.LOCK_EX)
+        os.set_inheritable(lock.fileno(), True)
+        HELD_LOCKS = (lock.fileno(),)
     try:
         table[cmd][1]()
     except Refused as e:
