@@ -62,7 +62,9 @@ export function detectTrends(metrics: WeeklyMetric[]): TrendAlert[] {
         ? curr < prev
         : curr > prev;
 
-      if (isDeteriorating) {
+      const isNextWeek = sorted[i].weekNumber === sorted[i - 1].weekNumber + 1;
+
+      if (isNextWeek && isDeteriorating) {
         consecutiveDeteriorating++;
       } else {
         consecutiveDeteriorating = 0;
