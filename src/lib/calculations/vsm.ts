@@ -215,9 +215,19 @@ export function generateImprovementNarrative(
   const parts: string[] = [];
   if (summary.leadTimeReduction > 0) {
     parts.push(`reduce el lead time en ${fmt(summary.leadTimeReduction)} horas (${fmt(summary.leadTimeReductionPct)}%)`);
+  } else if (summary.leadTimeReduction < 0) {
+    const m = comparison.metrics.find((x) => x.label === "Lead time");
+    const range = m ? ` de ${fmt(m.current)} a ${fmt(m.future)} horas` : "";
+    // A percentage over a zero baseline is undefined, so it is omitted.
+    const pct = m && m.current > 0 ? ` (+${fmt(summary.leadTimeReductionPct)}%)` : "";
+    parts.push(`aumenta el lead time${range}${pct}`);
   }
   if (summary.efficiencyGain > 0) {
     parts.push(`mejora la eficiencia de flujo en ${fmt(summary.efficiencyGain)} puntos porcentuales`);
+  } else if (summary.efficiencyGain < 0) {
+    const m = comparison.metrics.find((x) => x.label === "Eficiencia de flujo");
+    const range = m ? ` de ${fmt(m.current)}% a ${fmt(m.future)}%` : "";
+    parts.push(`baja la eficiencia de flujo${range} (${fmt(summary.efficiencyGain)} puntos porcentuales)`);
   }
   const headline = parts.length > 0
     ? `El estado futuro propuesto ${parts.join(" y ")}.`
