@@ -300,10 +300,10 @@ def cmd_advance(n, stage):
         require(decision == want, f"intake.md empieza con {decision!r}, no {want}")
         text = (d / "intake.md").read_text()
         summary = text.split("\n", 1)[1].strip()
+        m = re.search(r"^Class:\s*([ABCD])\b", text, re.M)
+        job["intake_class"] = m.group(1) if m else None
         if stage == "spec":
-            m = re.search(r"^Class:\s*([ABCD])\b", text, re.M)
             require(m, "intake.md no tiene la línea `Class: A|B|C|D`")
-            job["intake_class"] = m.group(1)
             make_clone(job)
             comment("issue", n, f"La fábrica tomó este issue (clase {m.group(1)}).\n\n{summary}")
         elif stage == "needs-info":
