@@ -473,9 +473,14 @@ SECRET_ENV = re.compile(r"TOKEN|SECRET|KEY|PASSWORD|PASSWD|AUTH|CREDENTIAL|COOKI
 RUN_ID = secrets.token_hex(6)
 
 
+# Outside the repo and anything with a lockfile above it: Next.js would take that as the
+# project root and resolve files from the main checkout.
+GATES = Path.home() / ".factory-gates" / REPO.name
+
+
 def gate_dirs(n):
     """Fresh folders per gate run: a process left over from an earlier run can't find or write these."""
-    return CLONES / f"{n}-gate-{RUN_ID}", CLONES / f"{n}-base-{RUN_ID}"
+    return GATES / f"{n}-gate-{RUN_ID}", GATES / f"{n}-base-{RUN_ID}"
 
 
 def private_state(n):
@@ -522,7 +527,7 @@ def extract(rev, dest):
 
 def digest(root, files):
     h = hashlib.sha256()
-    for f in sorted(files):
+    for f in sorted(set(files) - set(CONFIG.get("gate_outputs", []))):
         p = root / f
         body = os.readlink(p).encode() if p.is_symlink() else p.read_bytes() if p.is_file() else b"<missing>"
         h.update(f.encode() + b"\0" + body)
@@ -541,10 +546,20 @@ def confined(n, cmd, frozen=(), frozen_trees=()):
                "(deny file-write*)(allow file-write* " + " ".join(f'(subpath "{quote(p)}")' for p in writable) + ")"
                + ("(deny file-write* " + " ".join(f'(literal "{quote(p)}")' for p in frozen) + ")" if frozen else "")
                + ("(deny file-write* " + " ".join(f'(subpath "{quote(p)}")' for p in frozen_trees) + ")" if frozen_trees else "")
+               # nothing new at the top of either copy (.npmrc, .env, configs) except the known outputs
+               + "".join(f'(deny file-write* (regex #"^{re.escape(quote(d))}/[^/]+$"))'
+                         f'(allow file-write* ' + " ".join(f'(literal "{quote(d / o)}")' for o in ROOT_OUTPUTS) + ")"
+                         for d in (gate_dir, base_dir))
                + "(deny file-read* " + " ".join(f'(subpath "{quote(p)}")' for p in secrets) + ")"
                '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))')
     # shortcut: macOS sandbox-exec only; the GitHub runner needs its own isolation.
     return ["sandbox-exec", "-p", profile, *cmd]
+
+
+# What the install, checks and build may create at the top of a copy. Anything else there
+# (an .npmrc that swaps npm's script shell, an .env) would change how the checks run.
+ROOT_OUTPUTS = ("node_modules", ".next", ".tmp", ".npm-cache", ".cache", "tsconfig.tsbuildinfo", "coverage",
+                *CONFIG.get("gate_outputs", []))
 
 
 def frozen_paths(root, files):
@@ -552,6 +567,8 @@ def frozen_paths(root, files):
     root = root.resolve()
     out = set()
     for f in files:
+        if f in CONFIG.get("gate_outputs", []):
+            continue
         p = root / f
         out.add(p)
         out.update(q for q in p.parents if q != root and q.is_relative_to(root))
@@ -613,6 +630,29 @@ def acceptance(n, sha, gate_dir, files, paths, log):
     return "PASS", f"{len(tests)} archivo(s) de prueba: fallan sin el cambio, pasan con él"
 
 
+AGE_SCRIPT = Path.home() / ".agents/skills/parche-flota/scripts/edad-lock.py"
+COOLDOWN_DAYS = 2
+
+
+def cooldown(n, sha, log):
+    """Every locked version new to this change must be at least COOLDOWN_DAYS old.
+
+    Runs in a checkout the factory makes of the exact commit (the script compares with
+    origin/main through git); it reads the lockfile as data and never runs the change's code.
+    """
+    if not AGE_SCRIPT.exists():
+        return False, f"falta {AGE_SCRIPT}"
+    view = GATES / f"{n}-age-{RUN_ID}"
+    rgit("worktree", "add", "-q", "--detach", str(view), sha)
+    try:
+        out = run(["python3", "-I", str(AGE_SCRIPT), str(view), str(COOLDOWN_DAYS)], check=False, timeout=600).stdout
+    finally:
+        rgit("worktree", "remove", "--force", str(view), check=False)
+    log.append(f"$ cooldown de {COOLDOWN_DAYS} días\n{out}")
+    ok = f"; 0 con menos de" in out and "sin fecha" not in out
+    return ok, out.strip().splitlines()[-1] if out.strip() else "sin salida"
+
+
 def cmd_gate(n):
     sys.exit(0 if run_gate(n) == "PASS" else 1)
 
@@ -629,7 +669,8 @@ def run_gate(n):
     try:
         files = extract(sha, gate_dir)
         before = digest(gate_dir, files)
-        installed = install(n, gate_dir, log)
+        young_ok, young_note = cooldown(n, sha, log)
+        installed = young_ok and install(n, gate_dir, log)
         checks = (confined_run(n, ["bash", str(FACTORY / "checks.sh")], gate_dir, 1800, frozen_paths(gate_dir, files),
                                [(gate_dir / "node_modules").resolve()], {"FACTORY_GATE_INSTALLED": "1"})
                   if installed else None)
@@ -637,7 +678,8 @@ def run_gate(n):
             log.append(f"$ factory/checks.sh\n{checks.stdout[-6000:]}{checks.stderr[-4000:]}")
         checks_v = "PASS" if checks and checks.returncode == 0 else "FAIL"
         acc_v, acc_note = (acceptance(n, sha, gate_dir, files, paths, log) if checks_v == "PASS"
-                           else ("SKIPPED", "los checks fallaron"))
+                           else ("SKIPPED", f"cooldown de dependencias: {young_note}" if not young_ok
+                                 else "los checks fallaron"))
         if digest(gate_dir, files) != before:  # the code under test rewrote itself: what passed isn't the commit
             checks_v, acc_v, acc_note = "FAIL", "FAIL", "el código modificó sus propios archivos durante el gate"
     finally:

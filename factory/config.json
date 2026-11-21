@@ -62,10 +62,16 @@
       "*permission*",
       "*roles*",
       "*membership*",
-      "src/app/*route.ts",
-      "src/app/*route.js",
       "src/pages/api/*",
-      "src/app/*/actions.ts"
+      "src/app/*/actions.ts",
+      "src/app/*route.ts",
+      "src/app/*route.tsx",
+      "src/app/*route.js",
+      "src/app/*route.jsx",
+      "src/server/actions/cases.ts",
+      "src/server/actions/ai*",
+      "src/app/(app)/dashboard/layout.tsx",
+      "src/app/(app)/layout.tsx"
     ]
   },
   "tests": [
@@ -97,5 +103,8 @@
     "src/components/*",
     "src/features/*.tsx",
     "src/app/globals.css"
+  ],
+  "gate_outputs": [
+    "next-env.d.ts"
   ]
 }
