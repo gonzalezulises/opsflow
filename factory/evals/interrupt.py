@@ -40,7 +40,8 @@ def main(argv):
         time.sleep(10)
     job = stage(n)
     if not job or job["stage"] != "build":
-        os.killpg(first.pid, signal.SIGTERM)
+        if first.poll() is None:
+            os.killpg(first.pid, signal.SIGTERM)
         print(f"FALLA: el job nunca llegó a build (etapa: {job and job['stage']})")
         return 1
     time.sleep(60)  # let the builder get some work in before the cut
