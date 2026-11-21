@@ -22,6 +22,10 @@ def matches(path, patterns):
     return any(fnmatch.fnmatch(path, p) for p in patterns)
 
 
+DEP_FIELDS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
+OPAQUE_FIELDS = ("overrides", "resolutions", "bundleDependencies", "bundledDependencies", "workspaces",
+                 "packageManager", "engines")
+INSTALL_SCRIPTS = ("preinstall", "install", "postinstall", "prepare", "prepack", "postpack")
 PLAIN = re.compile(r"[\^~]?\d+(\.\d+){0,2}(-[0-9A-Za-z.-]+)?")  # 1, ^1.2, ~1.2.3, 1.2.3-beta.1
 
 
@@ -36,7 +40,13 @@ def dep_changes(base_pkg, head_pkg, base_lock=None, head_lock=None):
         if not text:
             return {}
         data = json.loads(text)
-        return {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+        return {k: v for field in DEP_FIELDS for k, v in data.get(field, {}).items()}
+
+    def other(text):
+        """Install-affecting fields the policy doesn't model: any change to them is reported."""
+        data = json.loads(text) if text else {}
+        scripts = data.get("scripts", {})
+        return {**{f: data.get(f) for f in OPAQUE_FIELDS}, **{f"scripts.{s}": scripts.get(s) for s in INSTALL_SCRIPTS}}
 
     def resolved(lock):
         packages = json.loads(lock).get("packages", {}) if lock else {}
@@ -51,6 +61,7 @@ def dep_changes(base_pkg, head_pkg, base_lock=None, head_lock=None):
     added = sorted(set(head) - set(base))
     unreadable = sorted(n for n in set(head) & set(base)
                         if head[n] != base[n] and not PLAIN.fullmatch(head[n]))
+    unreadable += sorted(f for f, v in other(head_pkg).items() if v != other(base_pkg).get(f))
     base_v, head_v = (resolved(base_lock), resolved(head_lock)) if base_lock and head_lock else (base, head)
     bumped = sorted(n for n in set(head) & set(base)
                     if major(head_v.get(n, "")) is not None and major(base_v.get(n, "")) is not None
@@ -135,6 +146,10 @@ def _self_test():
     assert classify(["package.json"], config, "A", pkg({}), pkg({"b": "1.0.0"}))[0] == "C"
     for spec in ("npm:a@2.0.0", "1.0.0 || 2.0.0", "*"):  # specs that hid a major bump (audit 2026-11-21)
         assert classify(["package.json"], config, "A", pkg({"a": "1.0.0"}), pkg({"a": spec}))[0] == "C"
+    assert classify(["package.json"], config, "A", pkg({}),
+                    json.dumps({"optionalDependencies": {"x": "1.0.0"}}))[0] == "C"  # audit round 2
+    assert classify(["package.json"], config, "A", json.dumps({"scripts": {}}),
+                    json.dumps({"scripts": {"postinstall": "node x.js"}}))[0] == "C"
     lock = lambda v: json.dumps({"packages": {"node_modules/a": {"version": v}}})
     assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.0.0"}),
                     lock("1.4.0"), lock("2.0.0"))[0] == "C"  # the lockfile resolved a new major

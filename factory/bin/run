@@ -48,11 +48,20 @@ def main(argv):
     log = JOBS / f"run-{time.strftime('%Y%m%d-%H%M%S')}.log"
     claude = os.environ.get("CLAUDE_BIN", "claude")
     with open(log, "w") as out:
-        # Own process group, so a timeout ends claude AND its agents, gates and Codex runs
-        # before the lock is released and another run can pick the same jobs up.
+        # Claude gets its own process group, so stopping the run ends claude AND its agents,
+        # gates and Codex runs. It also inherits the lock: if this runner is killed outright,
+        # the lock stays held until the last of them exits, so no second run overlaps.
+        os.set_inheritable(lock.fileno(), True)
         proc = subprocess.Popen([claude, "-p", "/factory run", "--model", "opus"], cwd=REPO,
                                 stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-                                start_new_session=True)
+                                start_new_session=True, pass_fds=(lock.fileno(),))
+
+        def stop(signum, _frame):
+            os.killpg(proc.pid, signal.SIGKILL)
+            sys.exit(128 + signum)
+
+        signal.signal(signal.SIGTERM, stop)
+        signal.signal(signal.SIGINT, stop)
         try:
             code = proc.wait(timeout=MAX_SECONDS)
         except subprocess.TimeoutExpired:

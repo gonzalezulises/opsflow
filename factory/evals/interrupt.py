@@ -28,6 +28,21 @@ def stage(n):
     return json.loads(f.read_text()) if f.exists() else None
 
 
+def run_finished(wait=30):
+    """True once no process holds the run lock (claude and every agent it started are gone)."""
+    import fcntl
+    deadline = time.time() + wait
+    with open(REPO / "factory" / "jobs" / ".run.lock", "w") as lock:
+        while time.time() < deadline:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(lock, fcntl.LOCK_UN)
+                return True
+            except BlockingIOError:
+                time.sleep(2)
+    return False
+
+
 def main(argv):
     n = int(argv[0])
     first = subprocess.Popen(RUN, cwd=REPO, start_new_session=True,
@@ -45,8 +60,11 @@ def main(argv):
         print(f"FALLA: el job nunca llegó a build (etapa: {job and job['stage']})")
         return 1
     time.sleep(60)  # let the builder get some work in before the cut
-    os.killpg(first.pid, signal.SIGKILL)
+    first.send_signal(signal.SIGTERM)  # what a timeout or a stop sends; the runner ends its whole run
     first.wait()
+    if not run_finished():
+        print("FALLA: la corrida cortada sigue viva y tiene el lock")
+        return 1
     before = stage(n)
     print(f"corte: #{n} en {before['stage']}, ronda {before['round']}, {len(before['history'])} movimientos")
     second = subprocess.run(RUN, cwd=REPO, capture_output=True, text=True)

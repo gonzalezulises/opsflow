@@ -16,7 +16,13 @@
       ".claude/*",
       ".github/*",
       "AGENTS.md",
-      "CLAUDE.md"
+      "CLAUDE.md",
+      ".husky/*",
+      ".githooks/*",
+      "lefthook.yml",
+      ".lefthook*",
+      ".npmrc",
+      ".gitattributes"
     ],
     "C": [
       "src/server/auth/*",
@@ -33,15 +39,40 @@
       "src/proxy.ts",
       "supabase/*",
       "next.config.ts",
-      "drizzle.config.ts"
+      "drizzle.config.ts",
+      "vercel.json",
+      "vercel.ts",
+      "middleware.ts"
     ]
   },
-  "tests": ["*.test.ts", "*.test.tsx"],
-  "acceptance_exempt": ["package.json", "package-lock.json", "*.md", "docs/*"],
-  "acceptance_cmd": ["npx", "vitest", "run"],
+  "tests": [
+    "*.test.ts",
+    "*.test.tsx"
+  ],
+  "acceptance_exempt": [
+    "package.json",
+    "package-lock.json",
+    "*.md",
+    "docs/*"
+  ],
+  "acceptance_cmd": [
+    "npx",
+    "vitest",
+    "run"
+  ],
   "reviewers": {
-    "always": {"code": "codex", "security": "codex"},
-    "ui": {"ui": "sonnet"}
+    "always": {
+      "code": "codex",
+      "security": "codex"
+    },
+    "ui": {
+      "ui": "sonnet"
+    }
   },
-  "ui_paths": ["src/app/*.tsx", "src/components/*", "src/features/*.tsx", "src/app/globals.css"]
+  "ui_paths": [
+    "src/app/*.tsx",
+    "src/components/*",
+    "src/features/*.tsx",
+    "src/app/globals.css"
+  ]
 }
