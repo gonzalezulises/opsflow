@@ -89,6 +89,54 @@ describe("detectTrends", () => {
     expect(leadTimeAlert).toBeDefined();
     expect(leadTimeAlert!.currentValue).toBe(50);
   });
+
+  it("does not count skipped weeks as a streak", () => {
+    const metrics: WeeklyMetric[] = [
+      makeMetric({ weekNumber: 1, leadTime: 40 }),
+      makeMetric({ weekNumber: 3, leadTime: 45 }),
+      makeMetric({ weekNumber: 5, leadTime: 50 }),
+    ];
+
+    expect(detectTrends(metrics)).toEqual([]);
+  });
+
+  it("restarts the streak after a gap and counts the streak that follows", () => {
+    const metrics: WeeklyMetric[] = [
+      makeMetric({ weekNumber: 1, leadTime: 30 }),
+      makeMetric({ weekNumber: 3, leadTime: 40 }),
+      makeMetric({ weekNumber: 4, leadTime: 45 }),
+      makeMetric({ weekNumber: 5, leadTime: 50 }),
+    ];
+
+    const alerts = detectTrends(metrics);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].metric).toBe("leadTime");
+    expect(alerts[0].consecutiveWeeks).toBe(2);
+    expect(alerts[0].currentValue).toBe(50);
+    expect(alerts[0].previousValue).toBe(45);
+  });
+
+  it("does not alert when a gap follows a single week of deterioration", () => {
+    const metrics: WeeklyMetric[] = [
+      makeMetric({ weekNumber: 1, leadTime: 40 }),
+      makeMetric({ weekNumber: 2, leadTime: 45 }),
+      makeMetric({ weekNumber: 4, leadTime: 50 }),
+    ];
+
+    const alerts = detectTrends(metrics);
+    expect(alerts.find((a) => a.metric === "leadTime")).toBeUndefined();
+    expect(alerts).toEqual([]);
+  });
+
+  it("applies the gap rule to higher-is-better metrics", () => {
+    const metrics: WeeklyMetric[] = [
+      makeMetric({ weekNumber: 1, otdOtif: 90 }),
+      makeMetric({ weekNumber: 3, otdOtif: 85 }),
+      makeMetric({ weekNumber: 5, otdOtif: 80 }),
+    ];
+
+    expect(detectTrends(metrics)).toEqual([]);
+  });
 });
 
 describe("compareToTarget", () => {
