@@ -138,7 +138,7 @@
     "from\\s+[\"'](@/server/(?!actions/)|@/lib/supabase|@/lib/organization-settings)",
     "from\\s+[\"'](drizzle-orm|postgres|@supabase/|openai|server-only)",
     "\\bprocess\\.env\\b",
-    "\\bfetch\\s*\\(\\s*[\"'`]https?:",
+    "\\b(fetch|sendBeacon|XMLHttpRequest|WebSocket|EventSource|importScripts)\\b|\\.src\\s*=|window\\.open\\s*\\(",
     "\\bdangerouslySetInnerHTML\\b",
     "\\b(document\\.cookie|localStorage|sessionStorage)\\b"
   ]
