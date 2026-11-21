@@ -344,9 +344,8 @@ def cmd_advance(n, stage):
             require(not passed, "el gate pasó: el job va a review")
             if stage == "build":
                 next_round(job)
-            else:
-                require(job["round"] >= job["round_limit"], "aún quedan rondas: vuelve a build")
-                return to_human(job, f"El gate falló en la última ronda ({job['round']}). Ver `round-{job['round']}/gate.md`.")
+            else:  # escalating is always allowed: a failure the builder can't fix shouldn't burn rounds
+                return to_human(job, f"El gate falló en la ronda {job['round']} de {job['round_limit']}. Ver `round-{job['round']}/gate.md`.")
 
     elif old == "review":
         rd = round_dir(job)
@@ -360,7 +359,7 @@ def cmd_advance(n, stage):
             require(changes, "todas las revisiones pasaron: el job va a approve")
             next_round(job)
         else:
-            require(changes and job["round"] >= job["round_limit"], "aún quedan rondas: vuelve a build")
+            require(changes, "todas las revisiones pasaron: el job va a approve")
             return to_human(job, f"Revisiones con cambios pendientes tras la ronda {job['round']}: {', '.join(changes)}.")
 
     elif old == "approve":
@@ -396,7 +395,14 @@ def acceptance(n, paths, log):
         for t in tests:
             (base_dir / t).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(clone(n) / t, base_dir / t)
-        (base_dir / "node_modules").symlink_to(clone(n) / "node_modules")
+        lock = "package-lock.json"
+        if (base_dir / lock).read_bytes() == (clone(n) / lock).read_bytes():
+            (base_dir / "node_modules").symlink_to(clone(n) / "node_modules")
+        else:  # the change moves dependencies: the base needs its own install, or it tests the new versions
+            installed = run(["npm", "ci", "--prefer-offline", "--no-audit", "--no-fund"], cwd=base_dir,
+                            check=False, timeout=900)
+            if installed.returncode != 0:
+                return "FAIL", "no se pudo instalar la base para comparar"
         base_res = run(cmd, cwd=base_dir, check=False, timeout=900)
         log.append(f"$ {' '.join(cmd)}   (sin el cambio)\n{base_res.stdout[-3000:]}{base_res.stderr[-2000:]}")
     finally:
