@@ -25,12 +25,12 @@
       "eslint.config.*",
       "tsconfig.json",
       "postcss.config.*",
-      "*AGENTS.md",
-      "*CLAUDE.md",
       ".codex/*",
       ".cursor/*",
       ".yarnrc*",
-      ".pnpmfile.cjs"
+      ".pnpmfile.cjs",
+      "*AGENTS*.md",
+      "*CLAUDE*.md"
     ],
     "C": [
       "src/server/auth/*",
@@ -56,7 +56,12 @@
       "instrumentation*",
       "src/instrumentation*",
       "sentry.*.config.*",
-      "npm-shrinkwrap.json"
+      "npm-shrinkwrap.json",
+      "src/server/actions/org*",
+      "src/lib/organization-settings.ts",
+      "*permission*",
+      "*roles*",
+      "*membership*"
     ]
   },
   "tests": [

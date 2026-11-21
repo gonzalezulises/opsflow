@@ -23,6 +23,11 @@ def matches(path, patterns):
 
 
 REGISTRY = "https://registry.npmjs.org/"
+
+
+def registry_url(name, version):
+    """npm's canonical tarball URL: https://registry.npmjs.org/<name>/-/<basename>-<version>.tgz"""
+    return f"{REGISTRY}{name}/-/{name.rsplit('/', 1)[-1]}-{version}.tgz"
 DEP_FIELDS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
 OPAQUE_FIELDS = ("overrides", "resolutions", "bundleDependencies", "bundledDependencies", "workspaces",
                  "packageManager", "engines")
@@ -95,8 +100,8 @@ def lock_changes(base_lock, head_lock):
             up.add(name)  # a new install of a major the base never had
         if path in base and version == base[path][2] and (resolved, integrity) != base[path][3:]:
             swapped.add(name)  # same version, different tarball: its install scripts run before anything is frozen
-        if resolved and not str(resolved).startswith(REGISTRY):
-            swapped.add(name)
+        if resolved and resolved != registry_url(name, version):
+            swapped.add(name)  # the tarball must be exactly this package at this version, from the registry
     return sorted(new), sorted(up), sorted(swapped)
 
 
@@ -198,9 +203,15 @@ def _self_test():
                         json.dumps({"packages": {"node_modules/x/node_modules/t": {"version": b}}}))
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "2.0.0"))[0] == "C"  # audit round 4
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "1.3.0"))[0] == "A"
-    swap = lambda r: json.dumps({"packages": {"node_modules/h": {"version": "9.1.0", "resolved": r, "integrity": "sha512-x"}}})
-    assert classify(["package-lock.json"], config, "A", None, None,
-                    swap("https://registry.npmjs.org/h/-/h-9.1.0.tgz"), swap("https://evil.example/h.tgz"))[0] == "C"  # round 6
+    swap = lambda r, v="9.1.0": json.dumps({"packages": {"node_modules/h": {"version": v, "resolved": r, "integrity": "sha512-x"}}})
+    ok = "https://registry.npmjs.org/h/-/h-9.1.0.tgz"
+    assert classify(["package-lock.json"], config, "A", None, None, swap(ok), swap("https://evil.example/h.tgz"))[0] == "C"  # round 6
+    assert classify(["package-lock.json"], config, "A", None, None, swap(ok),
+                    swap("https://registry.npmjs.org/evil/-/evil-1.0.0.tgz", "9.1.1"))[0] == "C"  # round 7
+    assert classify(["package-lock.json"], config, "A", None, None, swap(ok),
+                    swap("https://registry.npmjs.org/h/-/h-9.1.1.tgz", "9.1.1"))[0] == "A"
+    scoped = registry_url("@s/p", "1.0.0")
+    assert scoped == "https://registry.npmjs.org/@s/p/-/p-1.0.0.tgz", scoped
     coexist = lambda a: json.dumps({"packages": {"node_modules/a/node_modules/t": {"version": a},
                                                  "node_modules/b/node_modules/t": {"version": "3.0.0"}}})
     assert classify(["package-lock.json"], config, "A", None, None, coexist("1.0.0"), coexist("2.0.0"))[0] == "C"  # round 5
