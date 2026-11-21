@@ -70,21 +70,28 @@ def dep_changes(base_pkg, head_pkg, base_lock=None, head_lock=None):
 
 
 def lock_changes(base_lock, head_lock):
-    """Packages new to the lockfile and majors that went up, at any depth (transitive included)."""
-    def majors(lock):
-        found = {}
+    """Packages new to the lockfile and majors that went up, per install path (transitive included)."""
+    def by_path(lock):
+        out = {}
         for key, entry in (json.loads(lock).get("packages", {}) if lock else {}).items():
-            if "node_modules/" not in key:
-                continue
-            name = key.rsplit("node_modules/", 1)[1]
-            digits = str(entry.get("version", "")).split(".")[0]
-            found.setdefault(name, set()).add(int(digits) if digits.isdigit() else -1)
-        return found
+            if "node_modules/" in key:
+                digits = str(entry.get("version", "")).split(".")[0]
+                out[key] = (key.rsplit("node_modules/", 1)[1], int(digits) if digits.isdigit() else -1)
+        return out
 
-    base, head = majors(base_lock), majors(head_lock)
-    new = sorted(set(head) - set(base))
-    up = sorted(n for n in set(head) & set(base) if max(head[n]) > max(base[n]))
-    return new, up
+    base, head = by_path(base_lock), by_path(head_lock)
+    base_majors = {}
+    for name, major in base.values():
+        base_majors.setdefault(name, set()).add(major)
+    new, up = set(), set()
+    for path, (name, major) in head.items():
+        if name not in base_majors:
+            new.add(name)
+        elif path in base and major > base[path][1]:
+            up.add(name)  # this install moved to a higher major
+        elif path not in base and major not in base_majors[name]:
+            up.add(name)  # a new install of a major the base never had
+    return sorted(new), sorted(up)
 
 
 def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base_lock=None, head_lock=None):
@@ -183,6 +190,9 @@ def _self_test():
                         json.dumps({"packages": {"node_modules/x/node_modules/t": {"version": b}}}))
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "2.0.0"))[0] == "C"  # audit round 4
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "1.3.0"))[0] == "A"
+    coexist = lambda a: json.dumps({"packages": {"node_modules/a/node_modules/t": {"version": a},
+                                                 "node_modules/b/node_modules/t": {"version": "3.0.0"}}})
+    assert classify(["package-lock.json"], config, "A", None, None, coexist("1.0.0"), coexist("2.0.0"))[0] == "C"  # round 5
     lock = lambda v: json.dumps({"packages": {"node_modules/a": {"version": v}}})
     assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.0.0"}),
                     lock("1.4.0"), lock("2.0.0"))[0] == "C"  # the lockfile resolved a new major

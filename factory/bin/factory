@@ -529,7 +529,7 @@ def digest(root, files):
     return h.hexdigest()
 
 
-def confined(n, cmd, frozen=()):
+def confined(n, cmd, frozen=(), frozen_trees=()):
     """The job's code: no credentials, writes only inside its gate folders, never to a committed file."""
     home = Path.home().resolve()
     gate_dir, base_dir = (d.resolve() for d in gate_dirs(n))
@@ -540,6 +540,7 @@ def confined(n, cmd, frozen=()):
     profile = ("(version 1)(allow default)"
                "(deny file-write*)(allow file-write* " + " ".join(f'(subpath "{quote(p)}")' for p in writable) + ")"
                + ("(deny file-write* " + " ".join(f'(literal "{quote(p)}")' for p in frozen) + ")" if frozen else "")
+               + ("(deny file-write* " + " ".join(f'(subpath "{quote(p)}")' for p in frozen_trees) + ")" if frozen_trees else "")
                + "(deny file-read* " + " ".join(f'(subpath "{quote(p)}")' for p in secrets) + ")"
                '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))')
     # shortcut: macOS sandbox-exec only; the GitHub runner needs its own isolation.
@@ -565,8 +566,19 @@ def clean_env(n):
     return env
 
 
-def confined_run(n, cmd, cwd, timeout, frozen=()):
-    return run(confined(n, cmd, frozen), cwd=cwd, check=False, timeout=timeout, env=clean_env(n))
+def confined_run(n, cmd, cwd, timeout, frozen=(), frozen_trees=(), env_extra=None):
+    env = {**clean_env(n), **(env_extra or {})}
+    return run(confined(n, cmd, frozen, frozen_trees), cwd=cwd, check=False, timeout=timeout, env=env)
+
+
+NPM_CI = ["npm", "ci", "--prefer-offline", "--no-audit", "--no-fund"]
+
+
+def install(n, where, log):
+    """npm ci on its own; afterwards the installed tree is frozen for everything the change runs."""
+    res = confined_run(n, NPM_CI, where, 900)
+    log.append(f"$ npm ci ({where.name})\n{res.stdout[-2000:]}{res.stderr[-2000:]}")
+    return res.returncode == 0
 
 
 def acceptance(n, sha, gate_dir, files, paths, log):
@@ -577,7 +589,8 @@ def acceptance(n, sha, gate_dir, files, paths, log):
     if not tests:
         return "FAIL", "el cambio no agrega ni modifica ninguna prueba"
     cmd = CONFIG["acceptance_cmd"] + tests
-    with_change = confined_run(n, cmd, gate_dir, 900, frozen_paths(gate_dir, files))
+    with_change = confined_run(n, cmd, gate_dir, 900, frozen_paths(gate_dir, files),
+                               [(gate_dir / "node_modules").resolve()])
     log.append(f"$ {' '.join(cmd)}   (con el cambio)\n{with_change.stdout[-3000:]}{with_change.stderr[-2000:]}")
     if with_change.returncode != 0:
         return "FAIL", "las pruebas del cambio no pasan con el cambio"
@@ -590,10 +603,10 @@ def acceptance(n, sha, gate_dir, files, paths, log):
     if (base_dir / lock).read_bytes() == (gate_dir / lock).read_bytes():
         (base_dir / "node_modules").symlink_to(gate_dir / "node_modules")
     else:  # the change moves dependencies: the base needs its own install, or it tests the new versions
-        installed = confined_run(n, ["npm", "ci", "--prefer-offline", "--no-audit", "--no-fund"], base_dir, 900)
-        if installed.returncode != 0:
+        if not install(n, base_dir, log):
             return "FAIL", "no se pudo instalar la base para comparar"
-    without = confined_run(n, cmd, base_dir, 900, frozen_paths(base_dir, base_files + tests))
+    without = confined_run(n, cmd, base_dir, 900, frozen_paths(base_dir, base_files + tests),
+                           [(base_dir / "node_modules").resolve(), (gate_dir / "node_modules").resolve()])
     log.append(f"$ {' '.join(cmd)}   (sin el cambio)\n{without.stdout[-3000:]}{without.stderr[-2000:]}")
     if without.returncode == 0:
         return "FAIL", "las pruebas también pasan sin el cambio: no demuestran nada"
@@ -616,9 +629,13 @@ def run_gate(n):
     try:
         files = extract(sha, gate_dir)
         before = digest(gate_dir, files)
-        checks = confined_run(n, ["bash", str(FACTORY / "checks.sh")], gate_dir, 1800, frozen_paths(gate_dir, files))
-        log.append(f"$ factory/checks.sh\n{checks.stdout[-6000:]}{checks.stderr[-4000:]}")
-        checks_v = "PASS" if checks.returncode == 0 else "FAIL"
+        installed = install(n, gate_dir, log)
+        checks = (confined_run(n, ["bash", str(FACTORY / "checks.sh")], gate_dir, 1800, frozen_paths(gate_dir, files),
+                               [(gate_dir / "node_modules").resolve()], {"FACTORY_GATE_INSTALLED": "1"})
+                  if installed else None)
+        if checks:
+            log.append(f"$ factory/checks.sh\n{checks.stdout[-6000:]}{checks.stderr[-4000:]}")
+        checks_v = "PASS" if checks and checks.returncode == 0 else "FAIL"
         acc_v, acc_note = (acceptance(n, sha, gate_dir, files, paths, log) if checks_v == "PASS"
                            else ("SKIPPED", "los checks fallaron"))
         if digest(gate_dir, files) != before:  # the code under test rewrote itself: what passed isn't the commit
