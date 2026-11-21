@@ -1,0 +1,133 @@
+"""Merge policy: the rules that decide whether a job may merge without a human.
+
+Pure functions only. The models give opinions; this module decides. Its inputs
+are facts read from git and from the job's evidence files, never model prose.
+
+  classify()   risk class of a diff: A fix, B feature, C sensitive, D controls
+  may_merge()  every reason the current commit can't merge (empty list = it can)
+
+Run `python3 factory/lib/policy.py` to run its self-test.
+"""
+
+import fnmatch
+import json
+
+CLASSES = "ABCD"
+AUTO = {"A", "B"}  # the only classes that merge without a human
+
+
+def matches(path, patterns):
+    # fnmatch's `*` also matches `/`, so "src/server/auth/*" covers subfolders.
+    return any(fnmatch.fnmatch(path, p) for p in patterns)
+
+
+def dep_changes(base_pkg, head_pkg):
+    """Added dependencies and major bumps between two package.json texts."""
+    def deps(text):
+        if not text:
+            return {}
+        data = json.loads(text)
+        return {**data.get("dependencies", {}), **data.get("devDependencies", {})}
+
+    def major(version):
+        digits = version.lstrip("^~>=< ").split(".")[0]
+        return int(digits) if digits.isdigit() else None
+
+    base, head = deps(base_pkg), deps(head_pkg)
+    added = sorted(set(head) - set(base))
+    bumped = sorted(n for n in set(head) & set(base)
+                    if major(head[n]) is not None and major(base[n]) is not None
+                    and major(head[n]) > major(base[n]))
+    return added, bumped
+
+
+def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None):
+    """Return (class, reasons). Paths and dependencies can raise intake's class, never lower it."""
+    if intake_class not in CLASSES:
+        intake_class = "C"  # an unreadable intake is treated as sensitive
+    found, reasons = intake_class, [f"intake: {intake_class}"]
+
+    def raise_to(cls, why):
+        nonlocal found
+        reasons.append(why)
+        if CLASSES.index(cls) > CLASSES.index(found):
+            found = cls
+
+    for path in paths:
+        if matches(path, config["classes"]["D"]):
+            raise_to("D", f"{path}: control de la fábrica")
+        elif matches(path, config["classes"]["C"]):
+            raise_to("C", f"{path}: ruta sensible")
+    added, bumped = dep_changes(base_pkg, head_pkg)
+    for name in added:
+        raise_to("C", f"dependencia nueva: {name}")
+    for name in bumped:
+        raise_to("C", f"cambio de versión mayor: {name}")
+    return found, reasons
+
+
+def may_merge(cls, evidence, current):
+    """Reasons the job can't merge now. Empty means the policy allows it.
+
+    evidence: {"gate": {"sha", "checks", "acceptance", "protected"},
+               "reviews": {lens: {"fingerprint", "verdict"}},
+               "required": [lens, ...],
+               "decision": {"fingerprint", "verdict"} or None}
+    current:  {"sha", "fingerprint"} of the branch as it would merge.
+    """
+    reasons = []
+    if cls not in AUTO:
+        reasons.append(f"clase {cls}: la decide una persona")
+    gate = evidence.get("gate") or {}
+    if gate.get("sha") != current["sha"]:
+        reasons.append("el gate no corrió sobre el commit que se fusionaría")
+    if gate.get("checks") != "PASS":
+        reasons.append("los checks no pasaron")
+    if gate.get("protected"):
+        reasons.append("el diff toca controles de la fábrica")
+    if gate.get("acceptance") not in {"PASS", "EXEMPT"}:
+        reasons.append("falta la prueba de aceptación (falla antes del cambio, pasa después)")
+    for lens in evidence.get("required", []):
+        review = (evidence.get("reviews") or {}).get(lens)
+        if not review:
+            reasons.append(f"falta la revisión {lens}")
+        elif review.get("fingerprint") != current["fingerprint"]:
+            reasons.append(f"la revisión {lens} es de otra versión del cambio")
+        elif review.get("verdict") != "PASS":
+            reasons.append(f"la revisión {lens} no aprobó")
+    decision = evidence.get("decision") or {}
+    if decision.get("verdict") != "APPROVE":
+        reasons.append("el approver no aprobó")
+    elif decision.get("fingerprint") != current["fingerprint"]:
+        reasons.append("la aprobación es de otra versión del cambio")
+    return reasons
+
+
+def _self_test():
+    config = {"classes": {"D": ["factory/*", ".github/*"], "C": ["src/server/auth/*"]}}
+    assert classify(["src/lib/x.ts"], config, "A")[0] == "A"
+    assert classify(["src/lib/x.ts"], config, "Z")[0] == "C"
+    assert classify(["src/server/auth/roles.ts"], config, "A")[0] == "C"
+    assert classify([".github/workflows/ci.yml", "src/server/auth/a.ts"], config, "A")[0] == "D"
+    assert classify(["src/lib/x.ts"], config, "C")[0] == "C"  # paths never lower intake
+    pkg = lambda deps: json.dumps({"dependencies": deps})
+    assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.2.0"}))[0] == "A"
+    assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^2.0.0"}))[0] == "C"
+    assert classify(["package.json"], config, "A", pkg({}), pkg({"b": "1.0.0"}))[0] == "C"
+
+    cur = {"sha": "s1", "fingerprint": "f1"}
+    good = {"gate": {"sha": "s1", "checks": "PASS", "acceptance": "PASS", "protected": []},
+            "required": ["code"], "reviews": {"code": {"fingerprint": "f1", "verdict": "PASS"}},
+            "decision": {"fingerprint": "f1", "verdict": "APPROVE"}}
+    assert may_merge("A", good, cur) == []
+    assert may_merge("C", good, cur)
+    assert may_merge("B", good, {"sha": "s2", "fingerprint": "f1"})  # code changed after the gate
+    assert may_merge("B", good, {"sha": "s1", "fingerprint": "f2"})  # reviews are stale
+    assert may_merge("A", {**good, "gate": {**good["gate"], "acceptance": "FAIL"}}, cur)
+    assert may_merge("A", {**good, "reviews": {}}, cur)
+    assert may_merge("A", {**good, "decision": None}, cur)
+    print("policy: self-test OK")
+
+
+if __name__ == "__main__":
+    _self_test()
