@@ -2,7 +2,6 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "allowUnsandboxedCommands": false,
     "excludedCommands": [
       "factory/bin/factory *",
       "gh issue create *"
