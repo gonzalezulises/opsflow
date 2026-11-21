@@ -146,4 +146,4 @@ src/
 
 ## Licencia
 
-Privado. Uso autorizado solo para bootcamps, workshops y consultoría con autorización del autor.
+[MIT](LICENSE)
