@@ -11,6 +11,7 @@ always come from main: the checkout must be clean and is fast-forwarded first.
 
 import fcntl
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -47,14 +48,22 @@ def main(argv):
     log = JOBS / f"run-{time.strftime('%Y%m%d-%H%M%S')}.log"
     claude = os.environ.get("CLAUDE_BIN", "claude")
     with open(log, "w") as out:
+        # Own process group, so a timeout ends claude AND its agents, gates and Codex runs
+        # before the lock is released and another run can pick the same jobs up.
+        proc = subprocess.Popen([claude, "-p", "/factory run", "--model", "opus"], cwd=REPO,
+                                stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                                start_new_session=True)
         try:
-            res = subprocess.run([claude, "-p", "/factory run", "--model", "opus"], cwd=REPO,
-                                 stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-                                 timeout=MAX_SECONDS)
-            code = res.returncode
+            code = proc.wait(timeout=MAX_SECONDS)
         except subprocess.TimeoutExpired:
             out.write(f"\nfactory run: cortada a las {MAX_SECONDS // 3600} h\n")
             code = 124
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # leftovers of a finished run die too
+            except ProcessLookupError:
+                pass
+            proc.wait()
     print("\n".join(log.read_text().splitlines()[-20:]))
     if code:
         print(f"la corrida terminó con código {code}: {log}")

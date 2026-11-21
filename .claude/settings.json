@@ -1,6 +1,26 @@
 {
   "sandbox": {
-    "enabled": false
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "excludedCommands": [
+      "factory/bin/factory *",
+      "gh issue create *"
+    ],
+    "filesystem": {
+      "allowWrite": [
+        "~/.npm",
+        "~/Library/Caches"
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com"
+      ],
+      "allowLocalBinding": true
+    }
   },
   "permissions": {
     "allow": [
@@ -11,35 +31,30 @@
       "Glob",
       "Grep",
       "Bash(factory/bin/factory *)",
-      "Bash(cd *)",
-      "Bash(head *)",
-      "Bash(cat *)",
-      "Bash(ls *)",
-      "Bash(grep *)",
-      "Bash(rg *)",
-      "Bash(find *)",
-      "Bash(wc *)",
-      "Bash(sed -n *)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git log*)",
-      "Bash(git show*)",
-      "Bash(git add *)",
-      "Bash(git commit *)",
-      "Bash(git rev-parse*)",
-      "Bash(git fetch*)",
-      "Bash(npm ci*)",
-      "Bash(npm run *)",
-      "Bash(npx vitest *)",
-      "Bash(npx tsc *)",
-      "Bash(npx eslint *)",
-      "Bash(gh issue create *)",
-      "mcp__playwright__*"
+      "mcp__playwright__*",
+      "Bash(gh issue create *)"
     ],
     "deny": [
+      "Edit(factory/lib/**)",
+      "Edit(factory/bin/**)",
+      "Edit(factory/prompts/**)",
+      "Edit(factory/config.json)",
+      "Edit(factory/checks.sh)",
+      "Edit(.claude/**)",
+      "Edit(factory/jobs/*/job.json)",
+      "Edit(factory/jobs/*/decision.*)",
+      "Edit(factory/jobs/*/round-*/*.json)",
+      "Edit(factory/jobs/*/round-*/gate.*)",
+      "Edit(factory/jobs/*/round-*/review-code.*)",
+      "Edit(factory/jobs/*/round-*/review-security.*)",
+      "Edit(factory/jobs/*/round-*/codex-*)",
       "Bash(git push*)",
-      "Bash(gh pr merge*)",
-      "Bash(gh api*)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(gh repo *)",
+      "Bash(gh secret *)",
+      "Bash(gh variable *)",
+      "Bash(gh workflow *)",
       "Bash(vercel *)",
       "Read(./.env)",
       "Read(./.env.*)"

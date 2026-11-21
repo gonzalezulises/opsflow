@@ -19,6 +19,7 @@ that justify it and refuses anything else.
 """
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -116,17 +117,17 @@ def head(n):
 
 
 def changed(n):
+    """Every path the change adds, modifies or deletes; a rename counts as both ends."""
     git(n, "fetch", "-q", "origin", BASE)
-    out = git(n, "diff", "--name-only", f"origin/{BASE}...HEAD")
-    return [p for p in out.splitlines() if p]
+    out = run(["git", "diff", "--no-renames", "--name-only", "-z", f"origin/{BASE}...HEAD"], cwd=clone(n)).stdout
+    return [p for p in out.split("\0") if p]
 
 
 def fingerprint(n):
-    """Identity of the job's own change, stable across clean syncs with the base."""
-    diff = git(n, "diff", f"origin/{BASE}...HEAD")
-    if not diff:
-        return "empty"
-    return run(["git", "patch-id", "--stable"], cwd=clone(n), stdin=diff + "\n").stdout.split(" ")[0]
+    """Exact bytes of the job's own change. Any edit, even whitespace, makes reviews stale."""
+    diff = run(["git", "diff", "--binary", "--full-index", "--no-renames", f"origin/{BASE}...HEAD"],
+               cwd=clone(n)).stdout
+    return hashlib.sha256(diff.encode()).hexdigest() if diff else "empty"
 
 
 def comment(kind, number, body):
@@ -263,11 +264,17 @@ def push_and_pr(job):
     require(not git(n, "status", "--porcelain"), "el clon tiene cambios sin commitear")
     require(changed(n), "el branch no tiene cambios respecto de la base")
     git(n, "push", "-q", "-u", "origin", job["branch"])
-    if not job["pr"]:
-        body = f"Closes #{n}\n\nAbierto por la fábrica. Estado y evidencia en `factory/jobs/{n}/`.\n\n{MARK}"
-        url = gh("pr", "create", "--draft", "--base", BASE, "--head", job["branch"],
-                 "--title", job["title"], "--body", body).strip()
-        job["pr"] = int(url.rstrip("/").split("/")[-1])
+    if not job["pr"]:  # a run cut after `gh pr create` left the PR without saving it: recover it
+        found = json.loads(gh("pr", "list", "--head", job["branch"], "--base", BASE, "--state", "open",
+                              "--json", "number"))
+        if found:
+            job["pr"] = found[0]["number"]
+        else:
+            body = f"Closes #{n}\n\nAbierto por la fábrica. Estado y evidencia en `factory/jobs/{n}/`.\n\n{MARK}"
+            url = gh("pr", "create", "--draft", "--base", BASE, "--head", job["branch"],
+                     "--title", job["title"], "--body", body).strip()
+            job["pr"] = int(url.rstrip("/").split("/")[-1])
+        save(job)
 
 
 def to_human(job, why):
@@ -293,6 +300,16 @@ def cmd_advance(n, stage):
     old = job["stage"]
     require(stage in MOVES.get(old, set()), f"#{n}: no se puede pasar de {old} a {stage}")
     d = jdir(n)
+
+    # Escalating is always allowed, even when the failed step left no artifacts
+    # (a gate that crashed, a Codex lens that failed twice). It can only add a human.
+    if stage == "needs-human" and old in {"gate", "review", "approve"}:
+        rd = round_dir(job)
+        if old == "approve" and first_line(d / "decision.md") == "ESCALATE":
+            return to_human(job, (d / "decision.md").read_text().split("\n", 1)[1].strip())
+        errors = [f"- `{e.name}`: {e.read_text().strip()[:300]}" for e in sorted(rd.glob("codex-*.err"))]
+        return to_human(job, f"La fábrica se detuvo en {old}, ronda {job['round']} de {job['round_limit']}. "
+                             f"Ver `factory/jobs/{n}/round-{job['round']}/`." + ("\n\n" + "\n".join(errors) if errors else ""))
 
     if old == "intake":
         decision = first_line(d / "intake.md")
@@ -342,10 +359,7 @@ def cmd_advance(n, stage):
             require(passed, "el gate no pasó")
         else:
             require(not passed, "el gate pasó: el job va a review")
-            if stage == "build":
-                next_round(job)
-            else:  # escalating is always allowed: a failure the builder can't fix shouldn't burn rounds
-                return to_human(job, f"El gate falló en la ronda {job['round']} de {job['round_limit']}. Ver `round-{job['round']}/gate.md`.")
+            next_round(job)
 
     elif old == "review":
         rd = round_dir(job)
@@ -355,16 +369,9 @@ def cmd_advance(n, stage):
         changes = [l for l, v in verdicts.items() if v != "VERDICT: PASS"]
         if stage == "approve":
             require(not changes, f"pidieron cambios: {', '.join(changes)}")
-        elif stage == "build":
-            require(changes, "todas las revisiones pasaron: el job va a approve")
-            next_round(job)
         else:
             require(changes, "todas las revisiones pasaron: el job va a approve")
-            return to_human(job, f"Revisiones con cambios pendientes tras la ronda {job['round']}: {', '.join(changes)}.")
-
-    elif old == "approve":
-        require(first_line(d / "decision.md") == "ESCALATE", "decision.md no dice ESCALATE")
-        return to_human(job, (d / "decision.md").read_text().split("\n", 1)[1].strip())
+            next_round(job)
 
     elif old == "needs-human":
         raise Refused("usa `factory feedback` o `factory reject`")
@@ -382,7 +389,7 @@ def acceptance(n, paths, log):
     if not tests:
         return "FAIL", "el cambio no agrega ni modifica ninguna prueba"
     cmd = CONFIG["acceptance_cmd"] + tests
-    now_res = run(cmd, cwd=clone(n), check=False, timeout=900)
+    now_res = run(confined(n, cmd), cwd=clone(n), check=False, timeout=900)
     log.append(f"$ {' '.join(cmd)}   (con el cambio)\n{now_res.stdout[-3000:]}{now_res.stderr[-2000:]}")
     if now_res.returncode != 0:
         return "FAIL", "las pruebas del cambio no pasan con el cambio"
@@ -399,11 +406,11 @@ def acceptance(n, paths, log):
         if (base_dir / lock).read_bytes() == (clone(n) / lock).read_bytes():
             (base_dir / "node_modules").symlink_to(clone(n) / "node_modules")
         else:  # the change moves dependencies: the base needs its own install, or it tests the new versions
-            installed = run(["npm", "ci", "--prefer-offline", "--no-audit", "--no-fund"], cwd=base_dir,
+            installed = run(confined(n, ["npm", "ci", "--prefer-offline", "--no-audit", "--no-fund"]), cwd=base_dir,
                             check=False, timeout=900)
             if installed.returncode != 0:
                 return "FAIL", "no se pudo instalar la base para comparar"
-        base_res = run(cmd, cwd=base_dir, check=False, timeout=900)
+        base_res = run(confined(n, cmd), cwd=base_dir, check=False, timeout=900)
         log.append(f"$ {' '.join(cmd)}   (sin el cambio)\n{base_res.stdout[-3000:]}{base_res.stderr[-2000:]}")
     finally:
         git(n, "worktree", "remove", "--force", str(base_dir), check=False)
@@ -412,20 +419,47 @@ def acceptance(n, paths, log):
     return "PASS", f"{len(tests)} archivo(s) de prueba: fallan sin el cambio, pasan con él"
 
 
+def confined(n, cmd):
+    """Run the job's own code (npm scripts, tests) able to write only its clones, temp and caches.
+
+    The change is untrusted: unconfined, a test could rewrite the policy or the evidence.
+    shortcut: macOS sandbox-exec only; the GitHub runner needs its own isolation.
+    """
+    home = Path.home().resolve()
+    writable = [clone(n).resolve(), (CLONES / f"{n}-base").resolve(), Path("/private/tmp"),
+                Path("/private/var/folders"), home / ".npm", home / "Library/Caches", Path("/dev")]
+    profile = ("(version 1)(allow default)(deny file-write*)(allow file-write* "
+               + " ".join(f'(subpath "{p}")' for p in writable) + ")")
+    return ["sandbox-exec", "-p", profile, *cmd]
+
+
+def tree_state(n):
+    return head(n), git(n, "status", "--porcelain", "--untracked-files=no")
+
+
 def cmd_gate(n):
+    sys.exit(0 if run_gate(n) == "PASS" else 1)
+
+
+def run_gate(n):
     job = load(n)
     require(job["stage"] in {"gate", "approve"}, f"#{n} está en {job['stage']}, no en gate")
     rd = round_dir(job)
+    (rd / "gate.json").unlink(missing_ok=True)  # an aborted gate must not leave an older PASS behind
     sha = head(n)
+    before = tree_state(n)
+    require(not before[1], "el clon tiene cambios sin commitear")
     paths = changed(n)
     log = []
-    checks = run(["bash", str(FACTORY / "checks.sh")], cwd=clone(n), check=False, timeout=1800)
+    checks = run(confined(n, ["bash", str(FACTORY / "checks.sh")]), cwd=clone(n), check=False, timeout=1800)
     log.append(f"$ factory/checks.sh\n{checks.stdout[-6000:]}{checks.stderr[-4000:]}")
     checks_v = "PASS" if checks.returncode == 0 else "FAIL"
     protected = [p for p in paths if policy.matches(p, CONFIG["classes"]["D"])]
     if job["intake_class"] == "D":
         protected = []  # a controls job may touch controls; the policy still keeps it from merging
     acc_v, acc_note = acceptance(n, paths, log) if checks_v == "PASS" else ("SKIPPED", "los checks fallaron")
+    if tree_state(n) != before:  # the code under test edited tracked files: what passed isn't the commit
+        checks_v, acc_v, acc_note = "FAIL", "FAIL", "el código modificó archivos versionados durante el gate"
     verdict = "PASS" if checks_v == "PASS" and not protected and acc_v in {"PASS", "EXEMPT"} else "FAIL"
     g = {"sha": sha, "verdict": verdict, "checks": checks_v, "acceptance": acc_v,
          "acceptance_note": acc_note, "protected": protected, "at": now()}
@@ -436,7 +470,7 @@ def cmd_gate(n):
         f"- Controles tocados: {', '.join(protected) or 'ninguno'}\n\nDetalle en gate.log.\n")
     print(f"GATE: {verdict} (checks {checks_v}, aceptación {acc_v}: {acc_note}"
           + (f", toca controles: {', '.join(protected)}" if protected else "") + ")")
-    sys.exit(0 if verdict == "PASS" else 1)
+    return verdict
 
 
 # ---------- reviews ----------
@@ -530,16 +564,22 @@ def cmd_merge(n):
         git(n, "merge", "--abort", check=False)
         return to_human(job, f"El branch choca con {BASE}; hay que resolver el conflicto.")
     paths = changed(n)
-    base_pkg = run(["git", "show", f"origin/{BASE}:package.json"], cwd=clone(n), check=False).stdout or None
-    head_pkg = (clone(n) / "package.json").read_text() if (clone(n) / "package.json").exists() else None
-    cls, why = policy.classify(paths, CONFIG, job["intake_class"] or "C", base_pkg, head_pkg)
+    at_base = lambda f: run(["git", "show", f"origin/{BASE}:{f}"], cwd=clone(n), check=False).stdout or None
+    at_head = lambda f: (clone(n) / f).read_text() if (clone(n) / f).exists() else None
+    cls, why = policy.classify(paths, CONFIG, job["intake_class"] or "C",
+                               at_base("package.json"), at_head("package.json"),
+                               at_base("package-lock.json"), at_head("package-lock.json"))
     job["class"] = cls
     save(job)
     if cls not in policy.AUTO:
         return to_human(job, f"Clase {cls}: este cambio lo aprueba una persona.\n\n" + "\n".join(f"- {w}" for w in why))
     # The sync may have moved HEAD: re-run the gate on the exact commit that would merge.
-    gate = subprocess.run([str(Path(__file__)), "gate", str(n)], capture_output=True, text=True)
-    print(gate.stdout.strip())
+    try:
+        verdict = run_gate(n)
+    except (Refused, subprocess.TimeoutExpired) as e:
+        return to_human(load(n), f"El gate final no terminó: {e}")
+    if verdict != "PASS":
+        return to_human(load(n), "El gate final, sobre el commit que se fusionaría, no pasó. Ver `gate.md`.")
     current = {"sha": head(n), "fingerprint": fingerprint(n)}
     blockers = policy.may_merge(cls, evidence(load(n)), current)
     if blockers:
@@ -598,6 +638,25 @@ def cmd_summary():
               f"ronda {j['round']}\tPR {('#' + str(j['pr'])) if j['pr'] else '-'}\t{mins} min\t{j['title'][:50]}")
 
 
+CONTROLS = ["factory/lib", "factory/bin", "factory/prompts", "factory/config.json", "factory/checks.sh",
+            ".claude/agents", ".claude/skills", ".claude/settings.json"]
+
+
+def controls_intact():
+    """Refuse to act if the factory's own files differ from what is committed and pushed.
+
+    Agents run as the same user as the factory; this catches one that edited the
+    policy, a prompt or the settings in the main checkout instead of its clone.
+    """
+    dirty = run(["git", "status", "--porcelain", "--", *CONTROLS], cwd=REPO).stdout.strip()
+    upstream = run(["git", "rev-parse", "@{u}"], cwd=REPO, check=False).stdout.strip()
+    here = run(["git", "rev-parse", "HEAD"], cwd=REPO).stdout.strip()
+    if dirty or upstream != here:
+        print("factory: los controles de la fábrica no coinciden con lo publicado; no actúo.\n"
+              + (dirty or f"HEAD {here[:8]} no es su upstream {upstream[:8] or '(ninguno)'}"), file=sys.stderr)
+        sys.exit(2)
+
+
 def main(argv):
     if not argv:
         sys.exit(__doc__)
@@ -619,6 +678,12 @@ def main(argv):
     if cmd not in table or len(args) != table[cmd][0]:
         sys.exit(__doc__)
     JOBS.mkdir(parents=True, exist_ok=True)
+    if cmd != "summary":
+        controls_intact()
+    if args and args[0].isdigit():  # one mutation per job at a time, even across overlapping runs
+        jdir(int(args[0])).mkdir(parents=True, exist_ok=True)
+        lock = open(jdir(int(args[0])) / ".lock", "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         table[cmd][1]()
     except Refused as e:

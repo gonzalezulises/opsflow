@@ -10,6 +10,7 @@ Run `python3 factory/lib/policy.py` to run its self-test.
 """
 
 import fnmatch
+import re
 import json
 
 CLASSES = "ABCD"
@@ -21,27 +22,43 @@ def matches(path, patterns):
     return any(fnmatch.fnmatch(path, p) for p in patterns)
 
 
-def dep_changes(base_pkg, head_pkg):
-    """Added dependencies and major bumps between two package.json texts."""
+PLAIN = re.compile(r"[\^~]?\d+(\.\d+){0,2}(-[0-9A-Za-z.-]+)?")  # 1, ^1.2, ~1.2.3, 1.2.3-beta.1
+
+
+def dep_changes(base_pkg, head_pkg, base_lock=None, head_lock=None):
+    """Added dependencies, major bumps and unreadable specs between two package.json texts.
+
+    Majors come from the versions the lockfiles resolve when both are given, so a
+    spec like `npm:x@2` or `1 || 2` can't hide a major bump. A changed spec that
+    isn't a plain version is reported too: the policy can't reason about it.
+    """
     def deps(text):
         if not text:
             return {}
         data = json.loads(text)
         return {**data.get("dependencies", {}), **data.get("devDependencies", {})}
 
+    def resolved(lock):
+        packages = json.loads(lock).get("packages", {}) if lock else {}
+        return {k[len("node_modules/"):]: v.get("version", "") for k, v in packages.items()
+                if k.startswith("node_modules/") and "/node_modules/" not in k}
+
     def major(version):
-        digits = version.lstrip("^~>=< ").split(".")[0]
+        digits = version.lstrip("^~>=< v").split(".")[0]
         return int(digits) if digits.isdigit() else None
 
     base, head = deps(base_pkg), deps(head_pkg)
     added = sorted(set(head) - set(base))
+    unreadable = sorted(n for n in set(head) & set(base)
+                        if head[n] != base[n] and not PLAIN.fullmatch(head[n]))
+    base_v, head_v = (resolved(base_lock), resolved(head_lock)) if base_lock and head_lock else (base, head)
     bumped = sorted(n for n in set(head) & set(base)
-                    if major(head[n]) is not None and major(base[n]) is not None
-                    and major(head[n]) > major(base[n]))
-    return added, bumped
+                    if major(head_v.get(n, "")) is not None and major(base_v.get(n, "")) is not None
+                    and major(head_v[n]) > major(base_v[n]))
+    return added, bumped, unreadable
 
 
-def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None):
+def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base_lock=None, head_lock=None):
     """Return (class, reasons). Paths and dependencies can raise intake's class, never lower it."""
     if intake_class not in CLASSES:
         intake_class = "C"  # an unreadable intake is treated as sensitive
@@ -58,11 +75,13 @@ def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None):
             raise_to("D", f"{path}: control de la fábrica")
         elif matches(path, config["classes"]["C"]):
             raise_to("C", f"{path}: ruta sensible")
-    added, bumped = dep_changes(base_pkg, head_pkg)
+    added, bumped, unreadable = dep_changes(base_pkg, head_pkg, base_lock, head_lock)
     for name in added:
         raise_to("C", f"dependencia nueva: {name}")
     for name in bumped:
         raise_to("C", f"cambio de versión mayor: {name}")
+    for name in unreadable:
+        raise_to("C", f"versión que la política no sabe leer: {name}")
     return found, reasons
 
 
@@ -114,6 +133,11 @@ def _self_test():
     assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.2.0"}))[0] == "A"
     assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^2.0.0"}))[0] == "C"
     assert classify(["package.json"], config, "A", pkg({}), pkg({"b": "1.0.0"}))[0] == "C"
+    for spec in ("npm:a@2.0.0", "1.0.0 || 2.0.0", "*"):  # specs that hid a major bump (audit 2026-11-21)
+        assert classify(["package.json"], config, "A", pkg({"a": "1.0.0"}), pkg({"a": spec}))[0] == "C"
+    lock = lambda v: json.dumps({"packages": {"node_modules/a": {"version": v}}})
+    assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.0.0"}),
+                    lock("1.4.0"), lock("2.0.0"))[0] == "C"  # the lockfile resolved a new major
 
     cur = {"sha": "s1", "fingerprint": "f1"}
     good = {"gate": {"sha": "s1", "checks": "PASS", "acceptance": "PASS", "protected": []},
