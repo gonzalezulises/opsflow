@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { calculateVSM, type ProcessStep } from "@/lib/calculations/vsm";
+import {
+  calculateVSM,
+  compareVSM,
+  generateImprovementNarrative,
+  type ProcessStep,
+} from "@/lib/calculations/vsm";
 
 const baseSteps: ProcessStep[] = [
   { processTimeMinutes: 12, waitTimeHours: 4, reworkPercentage: 18, addsValue: false },
@@ -86,5 +91,49 @@ describe("calculateVSM", () => {
     expect(result.flowEfficiency).toBe(100);
     expect(result.stepsCount).toBe(1);
     expect(result.valueAddStepsCount).toBe(1);
+  });
+});
+
+describe("generateImprovementNarrative", () => {
+  const step = (processTimeMinutes: number, waitTimeHours: number): ProcessStep[] => [
+    { processTimeMinutes, waitTimeHours, reworkPercentage: 0, addsValue: true },
+  ];
+  const headline = (current: ProcessStep[], future: ProcessStep[]) =>
+    generateImprovementNarrative(compareVSM(calculateVSM(current), calculateVSM(future)), []).headline;
+
+  it("reports both lead time increase and efficiency drop", () => {
+    expect(headline(step(60, 1), step(60, 3))).toBe(
+      "El estado futuro propuesto aumenta el lead time de 2.0 a 4.0 horas (+100.0%) y baja la eficiencia de flujo de 50.0% a 25.0% (25.0 puntos porcentuales)."
+    );
+  });
+
+  it("reports lead time reduction together with efficiency drop", () => {
+    expect(headline(step(60, 1), step(30, 1))).toBe(
+      "El estado futuro propuesto reduce el lead time en 0.5 horas (25.0%) y baja la eficiencia de flujo de 50.0% a 33.3% (16.7 puntos porcentuales)."
+    );
+  });
+
+  it("reports only the lead time increase when efficiency is unchanged", () => {
+    expect(headline(step(60, 1), step(120, 2))).toBe(
+      "El estado futuro propuesto aumenta el lead time de 2.0 a 4.0 horas (+100.0%)."
+    );
+  });
+
+  it("omits the lead time percentage when the current lead time is zero", () => {
+    expect(headline(step(0, 0), step(60, 1))).toBe(
+      "El estado futuro propuesto aumenta el lead time de 0.0 a 2.0 horas y mejora la eficiencia de flujo en 50.0 puntos porcentuales."
+    );
+  });
+
+  it("keeps the improvement headline", () => {
+    expect(headline(step(60, 3), step(60, 1))).toBe(
+      "El estado futuro propuesto reduce el lead time en 2.0 horas (50.0%) y mejora la eficiencia de flujo en 25.0 puntos porcentuales."
+    );
+  });
+
+  it("keeps the no-change headline when current equals future", () => {
+    expect(headline(step(60, 1), step(60, 1))).toBe(
+      "El estado futuro no muestra cambios significativos respecto al actual."
+    );
   });
 });
