@@ -52,3 +52,6 @@ next-env.d.ts
 /factory/jobs/
 /.worktrees/
 __pycache__/
+
+# Claude Code local settings (may hold secrets)
+.claude/settings.local.json
