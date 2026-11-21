@@ -52,7 +52,7 @@ Seed en `src/server/db/seeds/index.ts`.
 
 ## Software factory
 - `/factory run` procesa los issues con label `factory`: intake → spec → builder (Claude) → gate → revisión (Codex) → approver (Codex) → política de merge.
-- La política (`factory/lib/policy.py`) decide el merge, no un modelo: clase A o B, gate y prueba de aceptación sobre el commit exacto, revisiones y aprobación del mismo diff. Las clases C (rutas sensibles de `factory/config.json`, dependencias nuevas o versión mayor) y D (fábrica, CI, agentes) van a Ulises con label `factory:needs-human`.
+- La política (`factory/lib/policy.py`) decide el merge, no un modelo: clase A o B, gate y prueba de aceptación sobre el commit exacto, revisiones y aprobación del mismo diff. Solo se fusionan solos los cambios dentro de `autonomous` en `factory/config.json` (cálculos, componentes, hooks, pruebas, documentación, subidas menores de dependencias); todo lo demás es clase C, igual que dependencias nuevas o versiones mayores, y la clase D (fábrica, CI, agentes, scripts) también va a Ulises con label `factory:needs-human`.
 - El gate prueba una copia limpia del commit, fuera del repo y sin credenciales: cooldown de 2 días de dependencias, `factory/checks.sh` (lo mismo que `.github/workflows/ci.yml`) y pruebas del cambio que fallen sin él y pasen con él. Si cambia el CI, cambia también `checks.sh`.
 - Cada job trabaja en su propio clon, `.worktrees/<issue>/`, y su estado vive en `factory/jobs/<issue>/` (ambos ignorados por git, ESLint, tsc y Vitest). Solo `factory/bin/factory` hace push y habla con GitHub.
 - Preparar un clon: `npm ci`; las variables están en `.env.example` (el build basta con los placeholders de `factory/checks.sh`). Servidor en el puerto asignado: `npm run dev -- -p <port>`.

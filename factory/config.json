@@ -72,7 +72,8 @@
       "pnpm-lock.yaml",
       "yarn.lock",
       "bun.lock",
-      "bun.lockb"
+      "bun.lockb",
+      "src/features/auth/*"
     ]
   },
   "tests": [
@@ -107,5 +108,21 @@
   ],
   "gate_outputs": [
     "next-env.d.ts"
+  ],
+  "autonomous": [
+    "src/lib/calculations/*",
+    "src/lib/constants/*",
+    "src/lib/utils.ts",
+    "src/hooks/*",
+    "src/components/*",
+    "src/features/*/components/*",
+    "*.test.ts",
+    "*.test.tsx",
+    "docs/*",
+    "README.md",
+    "CHANGELOG.md",
+    "public/*",
+    "package.json",
+    "package-lock.json"
   ]
 }

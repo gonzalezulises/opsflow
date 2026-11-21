@@ -131,6 +131,9 @@ def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base
             raise_to("D", f"{path}: control de la fábrica")
         elif matches(path, config["classes"]["C"]):
             raise_to("C", f"{path}: ruta sensible")
+        elif "autonomous" in config and not matches(path, config["autonomous"]):
+            # an allowlist, not a denylist: a path nobody declared safe is sensitive by default
+            raise_to("C", f"{path}: fuera de las rutas que la fábrica fusiona sola")
     scripts = lambda text: json.loads(text).get("scripts", {}) if text else {}
     if scripts(base_pkg) != scripts(head_pkg):  # checks.sh runs these: changing them changes the checks
         raise_to("D", "package.json: cambian los scripts que corren las verificaciones")
@@ -196,6 +199,9 @@ def may_merge(cls, evidence, current):
 def _self_test():
     config = {"classes": {"D": ["factory/*", ".github/*"], "C": ["src/server/auth/*"]}}
     assert classify(["src/lib/x.ts"], config, "A")[0] == "A"
+    allow = {**config, "autonomous": ["src/lib/*"]}
+    assert classify(["src/lib/x.ts"], allow, "A")[0] == "A"
+    assert classify(["src/server/new-thing.ts"], allow, "A")[0] == "C"  # undeclared path: sensitive
     assert classify(["src/lib/x.ts"], config, "Z")[0] == "C"
     assert classify(["src/server/auth/roles.ts"], config, "A")[0] == "C"
     assert classify([".github/workflows/ci.yml", "src/server/auth/a.ts"], config, "A")[0] == "D"
