@@ -61,7 +61,11 @@
       "src/lib/organization-settings.ts",
       "*permission*",
       "*roles*",
-      "*membership*"
+      "*membership*",
+      "src/app/*route.ts",
+      "src/app/*route.js",
+      "src/pages/api/*",
+      "src/app/*/actions.ts"
     ]
   },
   "tests": [

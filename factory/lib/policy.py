@@ -17,9 +17,18 @@ CLASSES = "ABCD"
 AUTO = {"A", "B"}  # the only classes that merge without a human
 
 
+ROUTE_GROUP = re.compile(r"/\([^/]*\)(?=/)")
+
+
 def matches(path, patterns):
-    # fnmatch's `*` also matches `/`, so "src/server/auth/*" covers subfolders.
-    return any(fnmatch.fnmatch(path, p) for p in patterns)
+    """fnmatch's `*` also matches `/`, so "src/server/auth/*" covers subfolders.
+
+    Case-insensitive (macOS volumes are: agents.md IS AGENTS.md), and Next.js route
+    groups don't count: src/app/(app)/api/x serves /api/x, so it matches src/app/api/*.
+    """
+    p = path.lower()
+    candidates = {p, ROUTE_GROUP.sub("", p)}
+    return any(fnmatch.fnmatchcase(c, pat.lower()) for c in candidates for pat in patterns)
 
 
 REGISTRY = "https://registry.npmjs.org/"
@@ -132,6 +141,10 @@ def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base
         raise_to("C", f"cambio de versión mayor: {name}")
     for name in unreadable:
         raise_to("C", f"versión que la política no sabe leer: {name}")
+    if head_lock is not None:
+        data = json.loads(head_lock) if head_lock else {}
+        if data.get("lockfileVersion") not in (2, 3) or not isinstance(data.get("packages"), dict):
+            raise_to("C", "package-lock.json en un formato que la política no lee (se exige v2 o v3)")
     if base_lock and head_lock:
         new, up, swapped = lock_changes(base_lock, head_lock)
         for name in swapped:
@@ -199,23 +212,26 @@ def _self_test():
                     json.dumps({"scripts": {"postinstall": "node x.js"}}))[0] == "D"
     assert classify(["package.json"], config, "A", json.dumps({"scripts": {"test": "vitest run"}}),
                     json.dumps({"scripts": {"test": "true"}}))[0] == "D"  # audit round 3
-    two = lambda a, b: (json.dumps({"packages": {"node_modules/x/node_modules/t": {"version": a}}}),
-                        json.dumps({"packages": {"node_modules/x/node_modules/t": {"version": b}}}))
+    two = lambda a, b: (json.dumps({"lockfileVersion": 3, "packages": {"node_modules/x/node_modules/t": {"version": a}}}),
+                        json.dumps({"lockfileVersion": 3, "packages": {"node_modules/x/node_modules/t": {"version": b}}}))
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "2.0.0"))[0] == "C"  # audit round 4
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "1.3.0"))[0] == "A"
-    swap = lambda r, v="9.1.0": json.dumps({"packages": {"node_modules/h": {"version": v, "resolved": r, "integrity": "sha512-x"}}})
+    swap = lambda r, v="9.1.0": json.dumps({"lockfileVersion": 3, "packages": {"node_modules/h": {"version": v, "resolved": r, "integrity": "sha512-x"}}})
     ok = "https://registry.npmjs.org/h/-/h-9.1.0.tgz"
     assert classify(["package-lock.json"], config, "A", None, None, swap(ok), swap("https://evil.example/h.tgz"))[0] == "C"  # round 6
     assert classify(["package-lock.json"], config, "A", None, None, swap(ok),
                     swap("https://registry.npmjs.org/evil/-/evil-1.0.0.tgz", "9.1.1"))[0] == "C"  # round 7
     assert classify(["package-lock.json"], config, "A", None, None, swap(ok),
                     swap("https://registry.npmjs.org/h/-/h-9.1.1.tgz", "9.1.1"))[0] == "A"
+    v1 = json.dumps({"lockfileVersion": 1, "dependencies": {"h": {"version": "9.1.0", "resolved": "https://evil.example/h.tgz"}}})
+    assert classify(["package-lock.json"], config, "A", None, None, swap(ok), v1)[0] == "C"  # round 8
+    assert classify(["src/server/auth/ROLES.ts"], config, "A")[0] == "C"  # case-insensitive
     scoped = registry_url("@s/p", "1.0.0")
     assert scoped == "https://registry.npmjs.org/@s/p/-/p-1.0.0.tgz", scoped
-    coexist = lambda a: json.dumps({"packages": {"node_modules/a/node_modules/t": {"version": a},
+    coexist = lambda a: json.dumps({"lockfileVersion": 3, "packages": {"node_modules/a/node_modules/t": {"version": a},
                                                  "node_modules/b/node_modules/t": {"version": "3.0.0"}}})
     assert classify(["package-lock.json"], config, "A", None, None, coexist("1.0.0"), coexist("2.0.0"))[0] == "C"  # round 5
-    lock = lambda v: json.dumps({"packages": {"node_modules/a": {"version": v}}})
+    lock = lambda v: json.dumps({"lockfileVersion": 3, "packages": {"node_modules/a": {"version": v}}})
     assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.0.0"}),
                     lock("1.4.0"), lock("2.0.0"))[0] == "C"  # the lockfile resolved a new major
 
