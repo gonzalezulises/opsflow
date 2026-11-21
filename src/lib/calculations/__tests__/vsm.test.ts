@@ -119,6 +119,12 @@ describe("generateImprovementNarrative", () => {
     );
   });
 
+  it("omits the lead time percentage when the current lead time is zero", () => {
+    expect(headline(step(0, 0), step(60, 1))).toBe(
+      "El estado futuro propuesto aumenta el lead time de 0.0 a 2.0 horas y mejora la eficiencia de flujo en 50.0 puntos porcentuales."
+    );
+  });
+
   it("keeps the improvement headline", () => {
     expect(headline(step(60, 3), step(60, 1))).toBe(
       "El estado futuro propuesto reduce el lead time en 2.0 horas (50.0%) y mejora la eficiencia de flujo en 25.0 puntos porcentuales."

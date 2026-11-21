@@ -218,7 +218,9 @@ export function generateImprovementNarrative(
   } else if (summary.leadTimeReduction < 0) {
     const m = comparison.metrics.find((x) => x.label === "Lead time");
     const range = m ? ` de ${fmt(m.current)} a ${fmt(m.future)} horas` : "";
-    parts.push(`aumenta el lead time${range} (+${fmt(summary.leadTimeReductionPct)}%)`);
+    // A percentage over a zero baseline is undefined, so it is omitted.
+    const pct = m && m.current > 0 ? ` (+${fmt(summary.leadTimeReductionPct)}%)` : "";
+    parts.push(`aumenta el lead time${range}${pct}`);
   }
   if (summary.efficiencyGain > 0) {
     parts.push(`mejora la eficiencia de flujo en ${fmt(summary.efficiencyGain)} puntos porcentuales`);
