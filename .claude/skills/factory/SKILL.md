@@ -87,6 +87,11 @@ builder.
 
 Un job termina la corrida en `merged`, `rejected`, `needs-info` o `needs-human`.
 
+Puede que nadie esté leyendo: no le hagas preguntas al usuario ni esperes su
+respuesta. Lo que solo una persona puede decidir va al job como `needs-human`
+(si viene del approver) o `needs-info` (si viene de intake); un caso límite
+menor va como nota en el resumen final.
+
 ## /factory run
 
 1. `factory/bin/factory queue`. Cada línea: `acción  issue  etapa  nota`.
