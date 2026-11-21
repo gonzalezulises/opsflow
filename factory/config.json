@@ -38,7 +38,6 @@
       "src/server/ai/*",
       "src/server/email/*",
       "src/server/lib/admin-api-route.ts",
-      "src/server/actions/organization.ts",
       "src/app/api/*",
       "src/app/auth/*",
       "src/app/(app)/invite/*",
@@ -57,7 +56,6 @@
       "src/instrumentation*",
       "sentry.*.config.*",
       "npm-shrinkwrap.json",
-      "src/server/actions/org*",
       "src/lib/organization-settings.ts",
       "*permission*",
       "*roles*",
@@ -68,10 +66,13 @@
       "src/app/*route.tsx",
       "src/app/*route.js",
       "src/app/*route.jsx",
-      "src/server/actions/cases.ts",
-      "src/server/actions/ai*",
       "src/app/(app)/dashboard/layout.tsx",
-      "src/app/(app)/layout.tsx"
+      "src/app/(app)/layout.tsx",
+      "src/server/actions/*",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+      "bun.lock",
+      "bun.lockb"
     ]
   },
   "tests": [

@@ -642,6 +642,10 @@ def cooldown(n, sha, log):
     """
     if not AGE_SCRIPT.exists():
         return False, f"falta {AGE_SCRIPT}"
+    tree = set(rgit("ls-tree", "-r", "--name-only", "-z", sha).split("\0"))
+    foreign = sorted(tree & {"pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"})
+    if foreign:  # the age script prefers pnpm's lockfile: a decoy would hide package-lock.json from it
+        return False, f"lockfile de otro gestor en un repo npm: {', '.join(foreign)}"
     view = GATES / f"{n}-age-{RUN_ID}"
     rgit("worktree", "add", "-q", "--detach", str(view), sha)
     try:
