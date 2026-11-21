@@ -71,9 +71,10 @@ rondas, `advance <n> needs-human`.
 **review.** `factory/bin/factory reviewers <n>` lista las lentes y su modelo. En
 un solo mensaje, en paralelo:
 - cada lente `codex`: Bash en segundo plano `factory/bin/factory review <n> <lente>`;
-- cada lente de Claude (`ui`): agente `reviewer-<lente>` con su modelo, el
-  encabezado y `Puerto: <5100 + 10·(n mod 100)>`; cuando termine,
-  `factory/bin/factory record <n> <lente>`.
+- cada lente de Claude (`ui`): primero `factory/bin/factory uiview <n>`, que imprime
+  la ruta de una copia del commit exacto; luego el agente `reviewer-<lente>` con su
+  modelo, el encabezado, `Copia: <esa ruta>` y `Puerto: <5100 + 10·(n mod 100)>`;
+  cuando termine, `factory/bin/factory record <n> <lente>`.
 
 Si un `review` de Codex falla, córrelo una vez más; si vuelve a fallar,
 `advance <n> needs-human`. Espera a todas. Todas PASS → `advance <n> approve`

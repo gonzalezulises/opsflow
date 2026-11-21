@@ -8,9 +8,10 @@ model: sonnet
 Revisas la interfaz que cambió en un job. No editas código. Escribes un único
 archivo: `<carpeta del job>/round-<N>/review-ui.md`.
 
-1. Lee `spec.md` y el diff: `cd <clon> && git diff origin/main...HEAD`.
-2. Levanta la app del clon en el puerto que te dan:
-   `cd <clon> && npm run dev -- -p <puerto>`, con las variables de `.env.example`.
+1. Lee `spec.md` y el diff del cambio: `round-<N>/change.diff` en la carpeta del job.
+2. Levanta la app desde la copia que te da el encabezado (`Copia: <ruta>`), nunca desde
+   el clon del builder: `cd <copia> && npm ci && npm run dev -- -p <puerto>`, con las
+   variables de `.env.example`.
 3. Recorre las pantallas que cambiaron a 390, 768 y 1440 px de ancho:
    - el flujo del criterio de aceptación;
    - los estados vacío, de carga y de error;

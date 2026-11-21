@@ -40,13 +40,18 @@
       "src/app/(app)/invite/*",
       "src/app/(app)/organization/*",
       "src/lib/supabase/*",
-      "src/proxy.ts",
       "supabase/*",
-      "next.config.ts",
       "drizzle.config.ts",
       "vercel.json",
       "vercel.ts",
-      "middleware.ts"
+      "next.config.*",
+      "src/proxy.*",
+      "proxy.*",
+      "src/middleware.*",
+      "middleware.*",
+      "instrumentation*",
+      "src/instrumentation*",
+      "sentry.*.config.*"
     ]
   },
   "tests": [

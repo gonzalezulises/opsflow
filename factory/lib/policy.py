@@ -69,6 +69,24 @@ def dep_changes(base_pkg, head_pkg, base_lock=None, head_lock=None):
     return added, bumped, unreadable
 
 
+def lock_changes(base_lock, head_lock):
+    """Packages new to the lockfile and majors that went up, at any depth (transitive included)."""
+    def majors(lock):
+        found = {}
+        for key, entry in (json.loads(lock).get("packages", {}) if lock else {}).items():
+            if "node_modules/" not in key:
+                continue
+            name = key.rsplit("node_modules/", 1)[1]
+            digits = str(entry.get("version", "")).split(".")[0]
+            found.setdefault(name, set()).add(int(digits) if digits.isdigit() else -1)
+        return found
+
+    base, head = majors(base_lock), majors(head_lock)
+    new = sorted(set(head) - set(base))
+    up = sorted(n for n in set(head) & set(base) if max(head[n]) > max(base[n]))
+    return new, up
+
+
 def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base_lock=None, head_lock=None):
     """Return (class, reasons). Paths and dependencies can raise intake's class, never lower it."""
     if intake_class not in CLASSES:
@@ -96,6 +114,12 @@ def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base
         raise_to("C", f"cambio de versión mayor: {name}")
     for name in unreadable:
         raise_to("C", f"versión que la política no sabe leer: {name}")
+    if base_lock and head_lock:
+        new, up = lock_changes(base_lock, head_lock)
+        for name in new:
+            raise_to("C", f"paquete nuevo en el lockfile: {name}")
+        for name in up:
+            raise_to("C", f"versión mayor nueva en el lockfile: {name}")
     return found, reasons
 
 
@@ -155,6 +179,10 @@ def _self_test():
                     json.dumps({"scripts": {"postinstall": "node x.js"}}))[0] == "D"
     assert classify(["package.json"], config, "A", json.dumps({"scripts": {"test": "vitest run"}}),
                     json.dumps({"scripts": {"test": "true"}}))[0] == "D"  # audit round 3
+    two = lambda a, b: (json.dumps({"packages": {"node_modules/x/node_modules/t": {"version": a}}}),
+                        json.dumps({"packages": {"node_modules/x/node_modules/t": {"version": b}}}))
+    assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "2.0.0"))[0] == "C"  # audit round 4
+    assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "1.3.0"))[0] == "A"
     lock = lambda v: json.dumps({"packages": {"node_modules/a": {"version": v}}})
     assert classify(["package.json"], config, "A", pkg({"a": "^1.0.0"}), pkg({"a": "^1.0.0"}),
                     lock("1.4.0"), lock("2.0.0"))[0] == "C"  # the lockfile resolved a new major
