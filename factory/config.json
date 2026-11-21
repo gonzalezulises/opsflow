@@ -15,8 +15,6 @@
       "factory/*",
       ".claude/*",
       ".github/*",
-      "AGENTS.md",
-      "CLAUDE.md",
       ".husky/*",
       ".githooks/*",
       "lefthook.yml",
@@ -26,7 +24,13 @@
       "vitest.config.*",
       "eslint.config.*",
       "tsconfig.json",
-      "postcss.config.*"
+      "postcss.config.*",
+      "*AGENTS.md",
+      "*CLAUDE.md",
+      ".codex/*",
+      ".cursor/*",
+      ".yarnrc*",
+      ".pnpmfile.cjs"
     ],
     "C": [
       "src/server/auth/*",
@@ -51,7 +55,8 @@
       "middleware.*",
       "instrumentation*",
       "src/instrumentation*",
-      "sentry.*.config.*"
+      "sentry.*.config.*",
+      "npm-shrinkwrap.json"
     ]
   },
   "tests": [

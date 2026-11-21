@@ -22,6 +22,7 @@ def matches(path, patterns):
     return any(fnmatch.fnmatch(path, p) for p in patterns)
 
 
+REGISTRY = "https://registry.npmjs.org/"
 DEP_FIELDS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies")
 OPAQUE_FIELDS = ("overrides", "resolutions", "bundleDependencies", "bundledDependencies", "workspaces",
                  "packageManager", "engines")
@@ -76,22 +77,27 @@ def lock_changes(base_lock, head_lock):
         for key, entry in (json.loads(lock).get("packages", {}) if lock else {}).items():
             if "node_modules/" in key:
                 digits = str(entry.get("version", "")).split(".")[0]
-                out[key] = (key.rsplit("node_modules/", 1)[1], int(digits) if digits.isdigit() else -1)
+                out[key] = (key.rsplit("node_modules/", 1)[1], int(digits) if digits.isdigit() else -1,
+                            entry.get("version"), entry.get("resolved"), entry.get("integrity"))
         return out
 
     base, head = by_path(base_lock), by_path(head_lock)
     base_majors = {}
-    for name, major in base.values():
+    for name, major, *_ in base.values():
         base_majors.setdefault(name, set()).add(major)
-    new, up = set(), set()
-    for path, (name, major) in head.items():
+    new, up, swapped = set(), set(), set()
+    for path, (name, major, version, resolved, integrity) in head.items():
         if name not in base_majors:
             new.add(name)
         elif path in base and major > base[path][1]:
             up.add(name)  # this install moved to a higher major
         elif path not in base and major not in base_majors[name]:
             up.add(name)  # a new install of a major the base never had
-    return sorted(new), sorted(up)
+        if path in base and version == base[path][2] and (resolved, integrity) != base[path][3:]:
+            swapped.add(name)  # same version, different tarball: its install scripts run before anything is frozen
+        if resolved and not str(resolved).startswith(REGISTRY):
+            swapped.add(name)
+    return sorted(new), sorted(up), sorted(swapped)
 
 
 def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base_lock=None, head_lock=None):
@@ -122,7 +128,9 @@ def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base
     for name in unreadable:
         raise_to("C", f"versión que la política no sabe leer: {name}")
     if base_lock and head_lock:
-        new, up = lock_changes(base_lock, head_lock)
+        new, up, swapped = lock_changes(base_lock, head_lock)
+        for name in swapped:
+            raise_to("C", f"tarball distinto o fuera del registro: {name}")
         for name in new:
             raise_to("C", f"paquete nuevo en el lockfile: {name}")
         for name in up:
@@ -190,6 +198,9 @@ def _self_test():
                         json.dumps({"packages": {"node_modules/x/node_modules/t": {"version": b}}}))
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "2.0.0"))[0] == "C"  # audit round 4
     assert classify(["package-lock.json"], config, "A", None, None, *two("1.2.0", "1.3.0"))[0] == "A"
+    swap = lambda r: json.dumps({"packages": {"node_modules/h": {"version": "9.1.0", "resolved": r, "integrity": "sha512-x"}}})
+    assert classify(["package-lock.json"], config, "A", None, None,
+                    swap("https://registry.npmjs.org/h/-/h-9.1.0.tgz"), swap("https://evil.example/h.tgz"))[0] == "C"  # round 6
     coexist = lambda a: json.dumps({"packages": {"node_modules/a/node_modules/t": {"version": a},
                                                  "node_modules/b/node_modules/t": {"version": "3.0.0"}}})
     assert classify(["package-lock.json"], config, "A", None, None, coexist("1.0.0"), coexist("2.0.0"))[0] == "C"  # round 5
