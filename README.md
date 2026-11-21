@@ -2,6 +2,18 @@
 
 Plataforma web de diagnóstico, análisis y mejora continua de procesos operativos, contextualizada para Latinoamérica. Transforma un toolkit Excel estático en un workflow guiado, multiusuario, auditable y asistido por IA.
 
+## Caso: del Excel del bootcamp a un flujo auditable
+
+**Problema.** Los bootcamps de Lean/Six Sigma del IESA diagnosticaban procesos con un toolkit de Excel. Lo usaba una persona a la vez, no dejaba rastro de los cambios y contaba como valor agregado todo el tiempo de proceso, lo que inflaba la eficiencia del flujo.
+
+**Enfoque.**
+- Nueve módulos guiados, del diagnóstico de madurez al reporte ejecutivo.
+- Dos modos de cálculo ([ADR-002](docs/adr/002-calculation-modes.md)): `lean_correct` por defecto y `compatibility`, que replica el Excel para que el facilitador muestre la diferencia.
+- Asistencia de IA por módulo con structured outputs validados con Zod ([ADR-003](docs/adr/003-ai-architecture.md)).
+- Aislamiento entre equipos con RLS en Postgres ([ADR-005](docs/adr/005-rls-postgres-strategy.md)).
+
+**Resultado.** Desplegado en [opsflow-gold.vercel.app](https://opsflow-gold.vercel.app) con un caso base precargado, y usado como material del Bootcamp IESA ([presentación](docs/OpsFlow-Bootcamp-IESA-Presentacion.pptx)).
+
 ## Stack
 
 - **Frontend**: Next.js 16 (App Router), TypeScript, Tailwind CSS v4, shadcn/ui
