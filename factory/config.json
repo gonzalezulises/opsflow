@@ -121,8 +121,25 @@
     "docs/*",
     "README.md",
     "CHANGELOG.md",
-    "public/*",
     "package.json",
-    "package-lock.json"
+    "package-lock.json",
+    "public/*.png",
+    "public/*.jpg",
+    "public/*.jpeg",
+    "public/*.gif",
+    "public/*.webp",
+    "public/*.avif",
+    "public/*.ico",
+    "public/*.woff",
+    "public/*.woff2"
+  ],
+  "sensitive_content": [
+    "[\"']use server[\"']",
+    "from\\s+[\"'](@/server/(?!actions/)|@/lib/supabase|@/lib/organization-settings)",
+    "from\\s+[\"'](drizzle-orm|postgres|@supabase/|openai|server-only)",
+    "\\bprocess\\.env\\b",
+    "\\bfetch\\s*\\(\\s*[\"'`]https?:",
+    "\\bdangerouslySetInnerHTML\\b",
+    "\\b(document\\.cookie|localStorage|sessionStorage)\\b"
   ]
 }

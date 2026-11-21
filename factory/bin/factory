@@ -830,9 +830,13 @@ def cmd_merge(n, attempt=1):
     paths = changed(n)
     at_base = lambda f: rgit("show", f"{base}:{f}", check=False) or None
     at_head = lambda f: rgit("show", f"{head(n)}:{f}", check=False) or None
+    def added(p):  # only the lines this change adds: what was already there was already reviewed
+        diff = rgit("diff", "--no-renames", "-U0", f"{base}...{head(n)}", "--", p, check=False)
+        return "\n".join(l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++"))
+    contents = {p: added(p) for p in paths if not p.endswith("package-lock.json")}
     cls, why = policy.classify(paths, CONFIG, job["intake_class"] or "C",
                                at_base("package.json"), at_head("package.json"),
-                               at_base("package-lock.json"), at_head("package-lock.json"))
+                               at_base("package-lock.json"), at_head("package-lock.json"), contents)
     job["class"] = cls
     save(job)
     if cls not in policy.AUTO:

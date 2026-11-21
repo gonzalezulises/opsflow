@@ -114,7 +114,8 @@ def lock_changes(base_lock, head_lock):
     return sorted(new), sorted(up), sorted(swapped)
 
 
-def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base_lock=None, head_lock=None):
+def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base_lock=None, head_lock=None,
+             contents=None):
     """Return (class, reasons). Paths and dependencies can raise intake's class, never lower it."""
     if intake_class not in CLASSES:
         intake_class = "C"  # an unreadable intake is treated as sensitive
@@ -134,6 +135,12 @@ def classify(paths, config, intake_class="B", base_pkg=None, head_pkg=None, base
         elif "autonomous" in config and not matches(path, config["autonomous"]):
             # an allowlist, not a denylist: a path nobody declared safe is sensitive by default
             raise_to("C", f"{path}: fuera de las rutas que la fábrica fusiona sola")
+    # What a file does matters, not only where it lives: a "use server" file in components is
+    # an endpoint, and an import of the database is data access, wherever they sit.
+    for path, text in (contents or {}).items():
+        for rule in config.get("sensitive_content", []):
+            if text is not None and re.search(rule, text):
+                raise_to("C", f"{path}: contiene {rule!r}")
     scripts = lambda text: json.loads(text).get("scripts", {}) if text else {}
     if scripts(base_pkg) != scripts(head_pkg):  # checks.sh runs these: changing them changes the checks
         raise_to("D", "package.json: cambian los scripts que corren las verificaciones")
@@ -199,7 +206,9 @@ def may_merge(cls, evidence, current):
 def _self_test():
     config = {"classes": {"D": ["factory/*", ".github/*"], "C": ["src/server/auth/*"]}}
     assert classify(["src/lib/x.ts"], config, "A")[0] == "A"
-    allow = {**config, "autonomous": ["src/lib/*"]}
+    allow = {**config, "autonomous": ["src/lib/*"], "sensitive_content": [r"[\"']use server[\"']"]}
+    assert classify(["src/lib/a.ts"], allow, "B", contents={"src/lib/a.ts": "'use server'\nexport async function f(){}"})[0] == "C"
+    assert classify(["src/lib/a.ts"], allow, "B", contents={"src/lib/a.ts": "export const x = 1"})[0] == "B"
     assert classify(["src/lib/x.ts"], allow, "A")[0] == "A"
     assert classify(["src/server/new-thing.ts"], allow, "A")[0] == "C"  # undeclared path: sensitive
     assert classify(["src/lib/x.ts"], config, "Z")[0] == "C"
