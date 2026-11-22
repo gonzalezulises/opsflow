@@ -42,16 +42,23 @@ def sh(*cmd, cwd=REPO, check=True):
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check).stdout
 
 
-def profile(writable, network=True):
-    """Writes only to `writable`, no credentials besides OpenCode's own, network only if asked."""
+def profile(writable, network=True, frozen=()):
+    """Writes only to `writable` (never `frozen`), no credentials besides OpenCode's own, network only if asked."""
     q = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
-    secrets = [HOME / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc",
-                                  "Library/Keychains", ".config/gh", ".npmrc")]
+    secrets = [HOME / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc", ".npmrc",
+                                  ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents")]
+    readable = [HOME / ".config/opencode", HOME / ".local/share/opencode",
+                HOME / ".local/share/fnm"]  # fnm keeps every Node version there
     own = [HOME / ".local/share/opencode", HOME / ".local/state/opencode", HOME / ".cache/opencode",
            HOME / ".bun", Path(os.environ.get("TMPDIR", "/tmp")).resolve(), Path("/dev")]
     return ("(version 1)(allow default)(deny file-write*)"
             "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own]) + ")"
-            "(deny file-read* " + " ".join(f'(subpath "{q(p)}")' for p in secrets) + ")"
+            + ("(deny file-write* " + " ".join(f'(subpath "{q(p)}")' for p in frozen) + ")" if frozen else "")
+            + "(deny file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in secrets) + ")"
+            '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))'
+            "(allow file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in readable) + ")"
+            '(deny job-creation)(deny appleevent-send)'
+            '(deny mach-lookup (global-name "com.apple.coreservices.launchservicesd") (global-name "com.apple.lsd.mapdb"))'
             + ("" if network else "(deny network*)"))
 
 
@@ -99,7 +106,9 @@ def clone(dest, sha):
 
 
 def checked(dest, cmd, timeout=600):
-    res = subprocess.run(["sandbox-exec", "-p", profile([dest], network=False), *cmd], cwd=dest,
+    """The model's code under test: node_modules frozen, so it can't swap the test runner."""
+    res = subprocess.run(["sandbox-exec", "-p", profile([dest], network=False, frozen=[dest / "node_modules"]), *cmd],
+                         cwd=dest,
                          capture_output=True, text=True, timeout=timeout, env=clean_env())
     return res.returncode == 0, (res.stdout + res.stderr)[-1500:]
 
@@ -125,6 +134,9 @@ def build_case(model, n):
     sh("git", "add", "-A", cwd=dest)
     files = [f for f in sh("git", "diff", "--cached", "--name-only", base, cwd=dest).split() if f]
     cls, why = policy.classify(files, CONFIG, "B") if files else ("-", [])
+    # the builder could write anywhere in its clone: grade with a fresh node_modules, not its own
+    shutil.rmtree(dest / "node_modules")
+    subprocess.run(["cp", "-cR", str(REPO / "node_modules"), str(dest / "node_modules")], check=True)
     # the merged PR's test, under another name so it can't collide with the model's own
     hidden_path = dest / hidden.replace(".test.ts", ".hidden-eval.test.ts")
     hidden_path.write_text(sh("git", "show", f"{merge}:{hidden}"))

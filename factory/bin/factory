@@ -542,7 +542,8 @@ def confined(n, cmd, frozen=(), frozen_trees=()):
     gate_dir, base_dir = (d.resolve() for d in gate_dirs(n))
     writable = [gate_dir, base_dir, Path("/dev")]
     secrets = [home / ".config", home / ".codex", home / ".claude", home / ".ssh", home / ".aws",
-               home / "Library/Keychains", home / ".git-credentials", home / ".netrc", REPO.resolve() / ".env"]
+               home / "Library", home / ".local/share", home / ".docker", home / ".kube", home / ".gnupg",
+               home / ".agents", home / ".git-credentials", home / ".netrc", REPO.resolve() / ".env"]
     quote = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     profile = ("(version 1)(allow default)"
                "(deny file-write*)(allow file-write* " + " ".join(f'(subpath "{quote(p)}")' for p in writable) + ")"
@@ -552,10 +553,25 @@ def confined(n, cmd, frozen=(), frozen_trees=()):
                + "".join(f'(deny file-write* (regex #"^{re.escape(quote(d))}/[^/]+$"))'
                          f'(allow file-write* ' + " ".join(f'(literal "{quote(d / o)}")' for o in ROOT_OUTPUTS) + ")"
                          for d in (gate_dir, base_dir))
-               + "(deny file-read* " + " ".join(f'(subpath "{quote(p)}")' for p in secrets) + ")"
-               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))')
+               # contents, not metadata: Node's realpath has to lstat the folders on the way to fnm's Node
+               + "(deny file-read-data " + " ".join(f'(subpath "{quote(p)}")' for p in secrets) + ")"
+               + '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))'  # any repo's .env on this Mac
+               + f'(allow file-read-data (subpath "{quote(NODE_HOME)}"))'
+               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))'
+               + NO_ESCAPE)
     # shortcut: macOS sandbox-exec only; the GitHub runner needs its own isolation.
     return ["sandbox-exec", "-p", profile, *cmd]
+
+
+# The home's tool stores are denied wholesale, but fnm keeps every Node version in one; no credentials there.
+NODE_HOME = Path.home().resolve() / ".local/share/fnm"
+
+
+# Nothing the confined command starts may run outside it: launchd jobs, Apple Events and
+# LaunchServices all hand work to a process the sandbox doesn't cover.
+NO_ESCAPE = ('(deny job-creation)(deny appleevent-send)'
+             '(deny mach-lookup (global-name "com.apple.coreservices.launchservicesd")'
+             ' (global-name "com.apple.lsd.mapdb") (global-name "com.apple.coreservices.quarantine-resolver"))')
 
 
 # What the install, checks and build may create at the top of a copy. Anything else there
@@ -725,14 +741,19 @@ def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=18
     home = Path.home().resolve()
     own = [home / ".local/share/opencode", home / ".local/state/opencode", home / ".cache/opencode",
            *(Path(d).resolve() for d in private_state(n).values()), Path("/dev")]
-    secrets_ = [home / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc",
-                                   "Library/Keychains", ".config/gh", ".npmrc")] + [REPO.resolve() / ".env"]
+    # credentials live all over the home: deny the stores wholesale, then let OpenCode read its own
+    secrets_ = [home / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc", ".npmrc",
+                                   ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents")]
+    readable = [home / ".config/opencode", home / ".local/share/opencode", NODE_HOME]
     q = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     profile = ("(version 1)(allow default)(deny file-write*)"
                "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own])
                + " ".join(f'(literal "{q(p)}")' for p in writable_files) + ")"
-               "(deny file-read* " + " ".join(f'(subpath "{q(p)}")' for p in secrets_) + ")"
-               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))')
+               "(deny file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in secrets_) + ")"
+               '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))'  # any repo's .env on this Mac
+               "(allow file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in readable) + ")"
+               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))'
+               + NO_ESCAPE)
     cmd = ["sandbox-exec", "-p", profile, str(OPENCODE), "run", "--pure", "--auto", "--format", "json",
            "-m", model, "--dir", str(where), prompt]
     res = run(cmd, check=False, timeout=timeout, env=clean_env(n))  # clean_env drops OPENCODE_API_KEY: auth.json wins
