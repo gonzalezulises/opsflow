@@ -30,6 +30,7 @@ import re
 import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -114,10 +115,16 @@ def gh(*args, check=True, stdin=None):
 
 
 def first_line(path):
-    if not path.is_symlink() and not path.exists():
+    """First line of a job file. Opened once, without following links: a builder could aim one at a secret."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
         return ""
-    require(not path.is_symlink() and path.is_file(), f"{path.name} no es un archivo normal")  # could point at a secret
-    return path.read_text().split("\n", 1)[0].strip()
+    except OSError:
+        raise Refused(f"{path.name} no es un archivo normal")
+    with os.fdopen(fd) as f:
+        require(stat.S_ISREG(os.fstat(f.fileno()).st_mode), f"{path.name} no es un archivo normal")
+        return f.readline().strip()
 
 
 def jdir(n):
@@ -761,6 +768,18 @@ def jail(writable=(), writable_files=(), readable=(), network=True):
     return ["sandbox-exec", "-p", profile]
 
 
+def factory_key():
+    """The factory's own OpenCode Go key (Keychain `OPENCODE_FACTORY_KEY`): what a confined run can read and leak
+    is a revocable key with its own quota, not Ulises's login. Until it exists, only the Go entry of his login."""
+    res = subprocess.run(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s",
+                          "OPENCODE_FACTORY_KEY", "-w"], capture_output=True, text=True)
+    if res.returncode == 0 and res.stdout.strip():
+        return res.stdout.strip()
+    # shortcut: falls back to Ulises's Go login, until OPENCODE_FACTORY_KEY is in the Keychain
+    login = json.loads((Path.home() / ".local/share/opencode/auth.json").read_text())
+    return login["opencode-go"]["key"]
+
+
 def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=1800):
     """One headless OpenCode run, confined: writes only to `writable` and a state folder of its own, no credentials.
 
@@ -773,7 +792,7 @@ def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=18
     shutil.rmtree(state, ignore_errors=True)
     (state / "share/opencode").mkdir(parents=True)
     login = state / "share/opencode/auth.json"
-    shutil.copyfile(home / ".local/share/opencode/auth.json", login)
+    login.write_text(json.dumps({"opencode-go": {"type": "api", "key": factory_key()}}))
     login.chmod(0o600)
     env = {**clean_env(n), "XDG_DATA_HOME": str(state / "share"), "XDG_STATE_HOME": str(state / "state"),
            "XDG_CACHE_HOME": str(state / "cache")}  # clean_env drops OPENCODE_API_KEY: the login copy wins
@@ -816,7 +835,10 @@ def cmd_build(n, note):
     prompt = (f"Clon: {c}. Carpeta del job: {d}/. Issue #{n}. Ronda {job['round']}. Clase {job['intake_class']}.\n"
               + (f"{note.strip()}\n" if note.strip() else "")
               + "Edita archivos con tu herramienta de edición; los comandos los corres dentro del clon.\n" + body)
-    opencode(n, model, c, prompt, writable=[c.resolve()], writable_files=[(d / "build.md").resolve()])
+    out = d.resolve() / "build.md"  # the literal path, never what a link left there resolves to
+    if out.is_symlink() or (out.exists() and not out.is_file()):
+        out.unlink()
+    opencode(n, model, c, prompt, writable=[c.resolve()], writable_files=[out])
     print(first_line(d / "build.md") or "sin build.md")
 
 

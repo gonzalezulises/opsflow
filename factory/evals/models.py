@@ -43,15 +43,15 @@ def sh(*cmd, cwd=REPO, check=True):
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check).stdout
 
 
-def profile(writable, network=True, frozen=()):
+def profile(writable, network=True, frozen=(), run=None):
     """Writes only to `writable` (never `frozen`), no credentials besides OpenCode's own, network only if asked."""
     q = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     secrets = [HOME / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc", ".npmrc",
                                   ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents",
                                   ".gemini", ".cursor", ".codeium", ".zsh_history", ".bash_history")]
-    readable = [HOME / ".config/opencode", STATE,
+    readable = [HOME / ".config/opencode", *([run.resolve()] if run else []),
                 HOME / ".local/share/fnm"]  # fnm keeps every Node version there
-    own = [STATE, Path(os.environ.get("TMPDIR", "/tmp")).resolve(), Path("/dev")]  # never a dir on PATH
+    own = [*([run.resolve()] if run else []), Path("/dev")]  # never a dir on PATH, never a shared temp
     return ("(version 1)(allow default)(deny file-write*)"
             "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own]) + ")"
             + ("(deny file-write* " + " ".join(f'(subpath "{q(p)}")' for p in frozen) + ")" if frozen else "")
@@ -65,21 +65,19 @@ def profile(writable, network=True, frozen=()):
             + ("" if network else "(deny network*)"))
 
 
-# OpenCode's data, state and cache for the eval: its own folder, with a copy of the login, never the home's.
-STATE = WORK / "opencode-state"
+# Each OpenCode run and each graded command gets its own folder (OpenCode's data, state, cache and TMPDIR):
+# a process the builder leaves behind keeps write access to its folder, never to the next run's.
+def run_dir():
+    d = WORK / f"run-{os.urandom(6).hex()}"
+    (d / "share/opencode").mkdir(parents=True)
+    (d / "tmp").mkdir()
+    return d
 
 
-def fresh_state():
-    shutil.rmtree(STATE, ignore_errors=True)
-    (STATE / "share/opencode").mkdir(parents=True)
-    shutil.copyfile(HOME / ".local/share/opencode/auth.json", STATE / "share/opencode/auth.json")
-    (STATE / "share/opencode/auth.json").chmod(0o600)
-
-
-def clean_env():
-    env = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG", "TERM") if k in os.environ}
-    return {**env, "XDG_DATA_HOME": str(STATE / "share"), "XDG_STATE_HOME": str(STATE / "state"),
-            "XDG_CACHE_HOME": str(STATE / "cache")}
+def clean_env(d):
+    env = {k: os.environ[k] for k in ("PATH", "HOME", "LANG", "TERM") if k in os.environ}
+    return {**env, "TMPDIR": str(d / "tmp"), "XDG_DATA_HOME": str(d / "share"), "XDG_STATE_HOME": str(d / "state"),
+            "XDG_CACHE_HOME": str(d / "cache")}
 
 
 def first_line_nofollow(path):
@@ -92,18 +90,38 @@ def first_line_nofollow(path):
         return f.readline().strip() if stat.S_ISREG(os.fstat(f.fileno()).st_mode) else "build.md no es un archivo"
 
 
+def jailed(cmd, cwd, env, timeout):
+    """Run in its own process group and kill the group at the end, on timeout or not."""
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return proc.returncode, out, err
+    except subprocess.TimeoutExpired:
+        return None, "", "tiempo agotado"
+    finally:
+        try:
+            os.killpg(proc.pid, 9)
+        except (ProcessLookupError, PermissionError):
+            pass
+        if proc.returncode is None:
+            proc.communicate()
+
+
 def opencode(model, where, prompt, writable, timeout):
     """One headless OpenCode run; returns (last text, tokens, cost, seconds, error)."""
     t0 = time.time()
-    cmd = ["sandbox-exec", "-p", profile(writable), str(OPENCODE), "run", "--pure", "--auto", "--format", "json",
-           "-m", f"opencode-go/{model}", "--dir", str(where), prompt]
+    d = run_dir()
+    key = json.loads((HOME / ".local/share/opencode/auth.json").read_text())["opencode-go"]["key"]
+    (d / "share/opencode/auth.json").write_text(json.dumps({"opencode-go": {"type": "api", "key": key}}))
+    (d / "share/opencode/auth.json").chmod(0o600)  # only the Go entry, not the whole login
+    cmd = ["sandbox-exec", "-p", profile(writable, run=d), str(OPENCODE), "run", "--pure", "--auto", "--format",
+           "json", "-m", f"opencode-go/{model}", "--dir", str(where), prompt]
     try:
-        # stdin closed: with a pipe left open, `opencode run` waits on it before starting
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=clean_env(),
-                             stdin=subprocess.DEVNULL)
-        out, err = res.stdout, (res.stderr.strip()[-300:] if res.returncode else "")
-    except subprocess.TimeoutExpired as e:
-        out, err = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), "tiempo agotado"
+        code, out, stderr = jailed(cmd, None, clean_env(d), timeout)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    err = "tiempo agotado" if code is None else (stderr.strip()[-300:] if code else "")
     texts, tokens, cost = [], 0, 0.0
     for line in out.splitlines():
         try:
@@ -138,12 +156,16 @@ SAFE_GIT = "git -c core.fsmonitor= -c core.hooksPath=/dev/null -c core.sshComman
 
 def checked(dest, cmd, timeout=600, tail=1500):
     """The model's code: confined, no network, node_modules frozen, npm's shell imposed (not an .npmrc's)."""
-    env = {**clean_env(), "npm_config_script_shell": "/bin/sh", "npm_config_userconfig": "/dev/null"}
-    res = subprocess.run(["sandbox-exec", "-p", profile([dest], network=False, frozen=[dest / "node_modules"]), *cmd],
-                         cwd=dest, capture_output=True, text=True, timeout=timeout, env=env, stdin=subprocess.DEVNULL)
+    d = run_dir()  # no OpenCode login in here: the code under test never sees one
+    env = {**clean_env(d), "npm_config_script_shell": "/bin/sh", "npm_config_userconfig": "/dev/null"}
+    try:
+        code, out, err = jailed(["sandbox-exec", "-p", profile([dest], network=False, frozen=[dest / "node_modules"],
+                                                          run=d), *cmd], dest, env, timeout)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
     if tail is None:
-        return res.returncode == 0, res.stdout
-    return res.returncode == 0, (res.stdout + res.stderr)[-tail:]
+        return code == 0, out
+    return code == 0, (out + err)[-tail:]
 
 
 def builder_prompt(clone_dir, job_dir, n):
@@ -163,7 +185,6 @@ def build_case(model, n):
     job.mkdir(parents=True)
     for f in ("issue.md", "intake.md", "spec.md"):
         shutil.copy(FACTORY / "jobs" / str(n) / f, job / f)
-    fresh_state()
     text, tokens, cost, secs, err = opencode(model, dest, builder_prompt(dest, job, n), [dest, job], 1500)
     # Everything after the build treats the clone as hostile: git runs confined with its config
     # overridden (fsmonitor, hooks), and grading happens in a fresh clone that gets only the patch.
@@ -234,7 +255,6 @@ def audit_case(model, view):
               + f"\n\nNo hay carpeta del job: la spec y el diff van aquí.\n\n## spec.md\n{spec}\n\n## diff\n```diff\n{diff}```\n\n"
               "Corres en modo solo lectura. Tu último mensaje es el contenido completo del archivo, "
               "empezando por la primera línea exigida, sin nada antes ni después.")
-    fresh_state()
     text, tokens, cost, secs, err = opencode(model, where, prompt, [], 900)
     first = text.strip().split("\n", 1)[0].strip()
     found = re.search(r"VERDICT: (PASS|CHANGES)", text)
