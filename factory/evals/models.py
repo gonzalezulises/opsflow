@@ -30,7 +30,9 @@ import policy  # noqa: E402
 
 OPENCODE = Path.home() / ".opencode/bin/opencode"
 WORK = Path.home() / ".factory-gates" / REPO.name / "models"
-MODELS = ["kimi-k2.7-code", "glm-5.3", "minimax-m3", "qwen3.7-plus"]
+# Zen models in the factory's own workspace (free today); Go models need the Go subscription
+MODELS = ["opencode/big-pickle", "opencode/deepseek-v4.1-flash-free", "opencode/mimo-v2.6-flash-free",
+          "opencode/nemotron-3.5-lightning-free"]
 CASES = {  # issue: (squash merge commit, hidden test)
     40: ("066938fe84c58a891cb0eac8bb02301f47f4c945", "src/lib/calculations/__tests__/tracking.test.ts"),
     47: ("cf0e4ad3c4b846321d3d2631db7808ae2db320d7", "src/lib/calculations/__tests__/vsm.test.ts"),
@@ -121,10 +123,10 @@ def opencode(model, where, prompt, writable, timeout):
                             "OPENCODE_FACTORY_KEY", "-w"], capture_output=True, text=True)
     assert found.returncode == 0 and found.stdout.strip(), "falta OPENCODE_FACTORY_KEY en el Keychain"
     key = found.stdout.strip()  # the factory's own revocable key, never the personal login
-    (d / "share/opencode/auth.json").write_text(json.dumps({"opencode-go": {"type": "api", "key": key}}))
+    (d / "share/opencode/auth.json").write_text(json.dumps({model.split("/")[0]: {"type": "api", "key": key}}))
     (d / "share/opencode/auth.json").chmod(0o600)  # only the Go entry, not the whole login
     cmd = ["sandbox-exec", "-p", profile(writable, run=d), str(OPENCODE), "run", "--pure", "--auto", "--format",
-           "json", "-m", f"opencode-go/{model}", "--dir", str(where), prompt]
+           "json", "-m", model, "--dir", str(where), prompt]
     try:
         code, out, stderr = jailed(cmd, None, clean_env(d), timeout)
     finally:
@@ -186,7 +188,7 @@ def builder_prompt(clone_dir, job_dir, n):
 def build_case(model, n):
     merge, hidden = CASES[n]
     base = sh("git", "rev-parse", f"{merge}^").strip()
-    tag = f"{model}-{n}"
+    tag = f"{model.split('/')[-1]}-{n}"
     dest, job = WORK / tag, WORK / f"{tag}-job"
     clone(dest, base)
     shutil.rmtree(job, ignore_errors=True)

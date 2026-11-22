@@ -776,6 +776,16 @@ def jail(writable=(), writable_files=(), readable=(), network=True):
     return ["sandbox-exec", "-p", profile]
 
 
+FREE_MODEL = re.compile(r"-free$|^opencode/big-pickle$")
+
+
+def require_model_allowed(model):
+    """Free Zen models keep or train on what they get and rotate within days: only a repo that opts in (a
+    public pilot) may use them; a client's code never goes there."""
+    require(not FREE_MODEL.search(model) or CONFIG.get("allow_free_models") is True,
+            f"{model} es un modelo gratis: este repo no los permite (allow_free_models)")
+
+
 def factory_key():
     """The factory's own OpenCode Go key (Keychain `OPENCODE_FACTORY_KEY`): what a confined run can read and leak
     is a revocable key with its own quota, never Ulises's login."""
@@ -793,12 +803,13 @@ def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=18
     home: a run can't plant anything the next run, or Ulises's own OpenCode, would load.
     Returns the text of its last message ("" when it left none).
     """
+    require_model_allowed(model)
     home = Path.home().resolve()
     state = (GATES / f"{n}-opencode-{RUN_ID}").resolve()
     shutil.rmtree(state, ignore_errors=True)
     (state / "share/opencode").mkdir(parents=True)
     login = state / "share/opencode/auth.json"
-    login.write_text(json.dumps({"opencode-go": {"type": "api", "key": factory_key()}}))
+    login.write_text(json.dumps({model.split("/")[0]: {"type": "api", "key": factory_key()}}))  # opencode (Zen) or opencode-go
     login.chmod(0o600)
     env = {**clean_env(n), "XDG_DATA_HOME": str(state / "share"), "XDG_STATE_HOME": str(state / "state"),
            "XDG_CACHE_HOME": str(state / "cache")}  # clean_env drops OPENCODE_API_KEY: the login copy wins
@@ -823,7 +834,9 @@ def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=18
     if res.returncode != 0 or errors:
         raise Refused(f"OpenCode ({model}) falló: {(errors or [res.stderr.strip()[-300:]])[-1]}")
     text = texts[-1].strip() if texts else ""
-    return re.sub(r"^```\w*\n(.*?)\n```$", r"\1", text, flags=re.S).strip()  # some models fence the whole answer
+    text = re.sub(r"^```\w*\n(.*?)\n```$", r"\1", text, flags=re.S).strip()  # some models fence the whole answer
+    first, _, rest = text.partition("\n")
+    return (first.strip("*_ ") + ("\n" + rest if rest else "")).strip()  # or bold the verdict line
 
 
 def cmd_builder(n):

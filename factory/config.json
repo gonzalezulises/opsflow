@@ -100,8 +100,8 @@
       "ui": "sonnet"
     },
     "maintenance": {
-      "code": "opencode-go/kimi-k2.7-code",
-      "security": "opencode-go/glm-5.3"
+      "code": "opencode/nemotron-3.5-lightning-free",
+      "security": "opencode/nemotron-3.5-lightning-free"
     }
   },
   "ui_paths": [
@@ -147,7 +147,8 @@
     "\\b(document\\.cookie|localStorage|sessionStorage)\\b"
   ],
   "builders": {
-    "A": "opencode-go/minimax-m3",
-    "B": "opencode-go/minimax-m3"
-  }
+    "A": "opencode/big-pickle",
+    "B": "opencode/big-pickle"
+  },
+  "allow_free_models": true
 }
