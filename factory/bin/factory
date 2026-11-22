@@ -90,6 +90,9 @@ def run(cmd, cwd=None, check=True, stdin=None, timeout=None, env=None, binary=Fa
 
     A test or npm script can leave children behind; on timeout or not, none
     outlives the command, so nothing keeps writing after the job lock is released.
+    shortcut: a descendant that calls setsid() escapes kill_group and keeps the inherited job lock,
+    so the job's next step waits on it (fails safe: nothing merges). Real containment needs a VM or
+    runner per job (the GitHub Actions mode); sandbox-exec can't hold a process group together.
     """
     proc = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=not binary, env=env,
