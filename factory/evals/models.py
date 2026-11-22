@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -48,10 +49,9 @@ def profile(writable, network=True, frozen=()):
     secrets = [HOME / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc", ".npmrc",
                                   ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents",
                                   ".gemini", ".cursor", ".codeium", ".zsh_history", ".bash_history")]
-    readable = [HOME / ".config/opencode", HOME / ".local/share/opencode",
+    readable = [HOME / ".config/opencode", STATE,
                 HOME / ".local/share/fnm"]  # fnm keeps every Node version there
-    own = [HOME / ".local/share/opencode", HOME / ".local/state/opencode", HOME / ".cache/opencode",
-           HOME / ".bun", Path(os.environ.get("TMPDIR", "/tmp")).resolve(), Path("/dev")]
+    own = [STATE, Path(os.environ.get("TMPDIR", "/tmp")).resolve(), Path("/dev")]  # never a dir on PATH
     return ("(version 1)(allow default)(deny file-write*)"
             "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own]) + ")"
             + ("(deny file-write* " + " ".join(f'(subpath "{q(p)}")' for p in frozen) + ")" if frozen else "")
@@ -65,8 +65,31 @@ def profile(writable, network=True, frozen=()):
             + ("" if network else "(deny network*)"))
 
 
+# OpenCode's data, state and cache for the eval: its own folder, with a copy of the login, never the home's.
+STATE = WORK / "opencode-state"
+
+
+def fresh_state():
+    shutil.rmtree(STATE, ignore_errors=True)
+    (STATE / "share/opencode").mkdir(parents=True)
+    shutil.copyfile(HOME / ".local/share/opencode/auth.json", STATE / "share/opencode/auth.json")
+    (STATE / "share/opencode/auth.json").chmod(0o600)
+
+
 def clean_env():
-    return {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG", "TERM") if k in os.environ}
+    env = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG", "TERM") if k in os.environ}
+    return {**env, "XDG_DATA_HOME": str(STATE / "share"), "XDG_STATE_HOME": str(STATE / "state"),
+            "XDG_CACHE_HOME": str(STATE / "cache")}
+
+
+def first_line_nofollow(path):
+    """The builder wrote this file: never follow a symlink it could point at a secret."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError:
+        return "sin build.md (o no es un archivo normal)"
+    with os.fdopen(fd) as f:
+        return f.readline().strip() if stat.S_ISREG(os.fstat(f.fileno()).st_mode) else "build.md no es un archivo"
 
 
 def opencode(model, where, prompt, writable, timeout):
@@ -140,6 +163,7 @@ def build_case(model, n):
     job.mkdir(parents=True)
     for f in ("issue.md", "intake.md", "spec.md"):
         shutil.copy(FACTORY / "jobs" / str(n) / f, job / f)
+    fresh_state()
     text, tokens, cost, secs, err = opencode(model, dest, builder_prompt(dest, job, n), [dest, job], 1500)
     # Everything after the build treats the clone as hostile: git runs confined with its config
     # overridden (fsmonitor, hooks), and grading happens in a fresh clone that gets only the patch.
@@ -164,7 +188,7 @@ def build_case(model, n):
     checked(grade, ["rm", "-f", hidden_rel])
     ok_checks, log_checks = (checked(grade, ["bash", "-c", "npm run lint && npm run typecheck && npm run test"])
                              if applied else (False, log_apply))
-    status = (job / "build.md").read_text().split("\n", 1)[0] if (job / "build.md").exists() else "sin build.md"
+    status = first_line_nofollow(job / "build.md")
     return {"model": model, "case": f"#{n}", "role": "builder", "hidden_test": ok_hidden, "checks": ok_checks,
             "class": cls, "class_why": why, "files": files, "status": status, "tokens": tokens, "cost": cost,
             "seconds": secs, "error": err, "last_text": text[-400:],
@@ -210,6 +234,7 @@ def audit_case(model, view):
               + f"\n\nNo hay carpeta del job: la spec y el diff van aquí.\n\n## spec.md\n{spec}\n\n## diff\n```diff\n{diff}```\n\n"
               "Corres en modo solo lectura. Tu último mensaje es el contenido completo del archivo, "
               "empezando por la primera línea exigida, sin nada antes ni después.")
+    fresh_state()
     text, tokens, cost, secs, err = opencode(model, where, prompt, [], 900)
     first = text.strip().split("\n", 1)[0].strip()
     found = re.search(r"VERDICT: (PASS|CHANGES)", text)

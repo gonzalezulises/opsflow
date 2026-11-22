@@ -114,7 +114,10 @@ def gh(*args, check=True, stdin=None):
 
 
 def first_line(path):
-    return path.read_text().split("\n", 1)[0].strip() if path.exists() else ""
+    if not path.is_symlink() and not path.exists():
+        return ""
+    require(not path.is_symlink() and path.is_file(), f"{path.name} no es un archivo normal")  # could point at a secret
+    return path.read_text().split("\n", 1)[0].strip()
 
 
 def jdir(n):
@@ -151,7 +154,9 @@ os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
 
 
 def git(n, *args, check=True):
-    return run([*GIT, *args], cwd=clone(n), check=check).stdout.strip()
+    """Git in the builder's clone: confined, no network, clean env (its attributes and filters are the builder's)."""
+    return run([*jail([clone(n).resolve(), Path("/dev")], network=False), *GIT, *args], cwd=clone(n),
+               check=check, env=clean_env(n)).stdout.strip()
 
 
 # The builder's clone is untrusted, .git/config included (it could point `origin` at
@@ -736,32 +741,50 @@ def builder_model(job):
     return CONFIG.get("builders", {}).get(job.get("intake_class") or "", "claude")
 
 
-def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=1800):
-    """One headless OpenCode run, confined: writes only to `writable` and OpenCode's own state, no credentials.
-
-    Returns the text of its last message ("" when it left none).
-    """
+def jail(writable=(), writable_files=(), readable=(), network=True):
+    """sandbox-exec prefix: writes only to `writable`, no credential stores, nothing launched outside it."""
     home = Path.home().resolve()
-    own = [home / ".local/share/opencode", home / ".local/state/opencode", home / ".cache/opencode",
-           *(Path(d).resolve() for d in private_state(n).values()), Path("/dev")]
-    # credentials live all over the home: deny the stores wholesale, then let OpenCode read its own
+    # credentials live all over the home: deny the stores wholesale, then allow back what's needed
     secrets_ = [home / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc", ".npmrc",
                                    ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents",
                                    ".gemini", ".cursor", ".codeium", ".zsh_history", ".bash_history")]
-    readable = [home / ".config/opencode", home / ".local/share/opencode", NODE_HOME]
     q = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     profile = ("(version 1)(allow default)(deny file-write*)"
-               "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own])
+               "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in writable)
                + " ".join(f'(literal "{q(p)}")' for p in writable_files) + ")"
                "(deny file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in secrets_) + ")"
-               '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))(allow file-read* (regex #"/\\.env\\.example$"))'  # any repo's .env on this Mac
-               "(allow file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in readable) + ")"
+               '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))(allow file-read* (regex #"/\\.env\\.example$"))'
+               "(allow file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in [NODE_HOME, *readable]) + ")"
                '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd")'
                ' (global-name "com.apple.securityd.xpc"))'
-               + NO_ESCAPE)
-    cmd = ["sandbox-exec", "-p", profile, str(OPENCODE), "run", "--pure", "--auto", "--format", "json",
+               + NO_ESCAPE + ("" if network else "(deny network*)"))
+    return ["sandbox-exec", "-p", profile]
+
+
+def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=1800):
+    """One headless OpenCode run, confined: writes only to `writable` and a state folder of its own, no credentials.
+
+    OpenCode's data, state and cache live in a fresh folder per run (with a copy of its login), never in the
+    home: a run can't plant anything the next run, or Ulises's own OpenCode, would load.
+    Returns the text of its last message ("" when it left none).
+    """
+    home = Path.home().resolve()
+    state = (GATES / f"{n}-opencode-{RUN_ID}").resolve()
+    shutil.rmtree(state, ignore_errors=True)
+    (state / "share/opencode").mkdir(parents=True)
+    login = state / "share/opencode/auth.json"
+    shutil.copyfile(home / ".local/share/opencode/auth.json", login)
+    login.chmod(0o600)
+    env = {**clean_env(n), "XDG_DATA_HOME": str(state / "share"), "XDG_STATE_HOME": str(state / "state"),
+           "XDG_CACHE_HOME": str(state / "cache")}  # clean_env drops OPENCODE_API_KEY: the login copy wins
+    own = [state, *(Path(d).resolve() for d in private_state(n).values()), Path("/dev")]
+    prefix = jail([*writable, *own], writable_files, readable=[home / ".config/opencode", state])
+    cmd = [*prefix, str(OPENCODE), "run", "--pure", "--auto", "--format", "json",
            "-m", model, "--dir", str(where), prompt]
-    res = run(cmd, check=False, timeout=timeout, env=clean_env(n))  # clean_env drops OPENCODE_API_KEY: auth.json wins
+    try:
+        res = run(cmd, check=False, timeout=timeout, env=env)
+    finally:
+        shutil.rmtree(state, ignore_errors=True)
     texts, errors = [], []
     for line in res.stdout.splitlines():
         try:
