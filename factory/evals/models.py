@@ -46,7 +46,8 @@ def profile(writable, network=True, frozen=()):
     """Writes only to `writable` (never `frozen`), no credentials besides OpenCode's own, network only if asked."""
     q = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     secrets = [HOME / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc", ".npmrc",
-                                  ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents")]
+                                  ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents",
+                                  ".gemini", ".cursor", ".codeium", ".zsh_history", ".bash_history")]
     readable = [HOME / ".config/opencode", HOME / ".local/share/opencode",
                 HOME / ".local/share/fnm"]  # fnm keeps every Node version there
     own = [HOME / ".local/share/opencode", HOME / ".local/state/opencode", HOME / ".cache/opencode",
@@ -55,9 +56,11 @@ def profile(writable, network=True, frozen=()):
             "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own]) + ")"
             + ("(deny file-write* " + " ".join(f'(subpath "{q(p)}")' for p in frozen) + ")" if frozen else "")
             + "(deny file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in secrets) + ")"
-            '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))'
+            '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))(allow file-read* (regex #"/\\.env\\.example$"))'
             "(allow file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in readable) + ")"
             '(deny job-creation)(deny appleevent-send)'
+            '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd")'
+            ' (global-name "com.apple.securityd.xpc"))'
             '(deny mach-lookup (global-name "com.apple.coreservices.launchservicesd") (global-name "com.apple.lsd.mapdb"))'
             + ("" if network else "(deny network*)"))
 
@@ -72,7 +75,9 @@ def opencode(model, where, prompt, writable, timeout):
     cmd = ["sandbox-exec", "-p", profile(writable), str(OPENCODE), "run", "--pure", "--auto", "--format", "json",
            "-m", f"opencode-go/{model}", "--dir", str(where), prompt]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=clean_env())
+        # stdin closed: with a pipe left open, `opencode run` waits on it before starting
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=clean_env(),
+                             stdin=subprocess.DEVNULL)
         out, err = res.stdout, (res.stderr.strip()[-300:] if res.returncode else "")
     except subprocess.TimeoutExpired as e:
         out, err = (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), "tiempo agotado"
@@ -105,12 +110,17 @@ def clone(dest, sha):
     subprocess.run(["cp", "-cR", str(REPO / "node_modules"), str(dest / "node_modules")], check=True)
 
 
-def checked(dest, cmd, timeout=600):
-    """The model's code under test: node_modules frozen, so it can't swap the test runner."""
+SAFE_GIT = "git -c core.fsmonitor= -c core.hooksPath=/dev/null -c core.sshCommand=false"
+
+
+def checked(dest, cmd, timeout=600, tail=1500):
+    """The model's code: confined, no network, node_modules frozen, npm's shell imposed (not an .npmrc's)."""
+    env = {**clean_env(), "npm_config_script_shell": "/bin/sh", "npm_config_userconfig": "/dev/null"}
     res = subprocess.run(["sandbox-exec", "-p", profile([dest], network=False, frozen=[dest / "node_modules"]), *cmd],
-                         cwd=dest,
-                         capture_output=True, text=True, timeout=timeout, env=clean_env())
-    return res.returncode == 0, (res.stdout + res.stderr)[-1500:]
+                         cwd=dest, capture_output=True, text=True, timeout=timeout, env=env, stdin=subprocess.DEVNULL)
+    if tail is None:
+        return res.returncode == 0, res.stdout
+    return res.returncode == 0, (res.stdout + res.stderr)[-tail:]
 
 
 def builder_prompt(clone_dir, job_dir, n):
@@ -131,18 +141,29 @@ def build_case(model, n):
     for f in ("issue.md", "intake.md", "spec.md"):
         shutil.copy(FACTORY / "jobs" / str(n) / f, job / f)
     text, tokens, cost, secs, err = opencode(model, dest, builder_prompt(dest, job, n), [dest, job], 1500)
-    sh("git", "add", "-A", cwd=dest)
-    files = [f for f in sh("git", "diff", "--cached", "--name-only", base, cwd=dest).split() if f]
+    # Everything after the build treats the clone as hostile: git runs confined with its config
+    # overridden (fsmonitor, hooks), and grading happens in a fresh clone that gets only the patch.
+    ok, patch = checked(dest, ["bash", "-c", f"{SAFE_GIT} add -A && {SAFE_GIT} diff --no-ext-diff --no-textconv --cached --binary {base}"],
+                        tail=None)
+    if not ok:  # a harness failure must not read as "the model changed nothing"
+        err = err or "no se pudo leer el cambio del clon"
+    grade = WORK / f"{tag}-grade"
+    clone(grade, base)
+    patch_file = WORK / f"{tag}.patch"
+    patch_file.write_text(patch if ok else "")
+    applied, log_apply = checked(grade, ["bash", "-c", f"test ! -s {patch_file} || {SAFE_GIT} apply --index {patch_file}"])
+    _, names = checked(grade, ["bash", "-c", f"{SAFE_GIT} diff --no-ext-diff --cached --name-only {base}"], tail=None)
+    files = [f for f in names.split() if f] if applied else []
     cls, why = policy.classify(files, CONFIG, "B") if files else ("-", [])
-    # the builder could write anywhere in its clone: grade with a fresh node_modules, not its own
-    shutil.rmtree(dest / "node_modules")
-    subprocess.run(["cp", "-cR", str(REPO / "node_modules"), str(dest / "node_modules")], check=True)
-    # the merged PR's test, under another name so it can't collide with the model's own
-    hidden_path = dest / hidden.replace(".test.ts", ".hidden-eval.test.ts")
-    hidden_path.write_text(sh("git", "show", f"{merge}:{hidden}"))
-    ok_hidden, log_hidden = checked(dest, ["npx", "vitest", "run", str(hidden_path.relative_to(dest))])
-    hidden_path.unlink()
-    ok_checks, log_checks = checked(dest, ["bash", "-c", "npm run lint && npm run typecheck && npm run test"])
+    # the merged PR's test, under another name; copied in confined, so a planted symlink can't redirect it
+    hidden_rel = hidden.replace(".test.ts", ".hidden-eval.test.ts")
+    src_test = WORK / f"{tag}.hidden.ts"
+    src_test.write_text(sh("git", "show", f"{merge}:{hidden}"))
+    checked(grade, ["bash", "-c", f"rm -f {hidden_rel} && cp {src_test} {hidden_rel}"])
+    ok_hidden, log_hidden = checked(grade, ["npx", "vitest", "run", hidden_rel]) if applied else (False, log_apply)
+    checked(grade, ["rm", "-f", hidden_rel])
+    ok_checks, log_checks = (checked(grade, ["bash", "-c", "npm run lint && npm run typecheck && npm run test"])
+                             if applied else (False, log_apply))
     status = (job / "build.md").read_text().split("\n", 1)[0] if (job / "build.md").exists() else "sin build.md"
     return {"model": model, "case": f"#{n}", "role": "builder", "hidden_test": ok_hidden, "checks": ok_checks,
             "class": cls, "class_why": why, "files": files, "status": status, "tokens": tokens, "cost": cost,

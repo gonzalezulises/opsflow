@@ -543,7 +543,9 @@ def confined(n, cmd, frozen=(), frozen_trees=()):
     writable = [gate_dir, base_dir, Path("/dev")]
     secrets = [home / ".config", home / ".codex", home / ".claude", home / ".ssh", home / ".aws",
                home / "Library", home / ".local/share", home / ".docker", home / ".kube", home / ".gnupg",
-               home / ".agents", home / ".git-credentials", home / ".netrc", REPO.resolve() / ".env"]
+               home / ".agents", home / ".gemini", home / ".cursor", home / ".codeium", home / ".npmrc",
+               home / ".zsh_history", home / ".bash_history",
+               home / ".git-credentials", home / ".netrc", REPO.resolve() / ".env"]
     quote = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     profile = ("(version 1)(allow default)"
                "(deny file-write*)(allow file-write* " + " ".join(f'(subpath "{quote(p)}")' for p in writable) + ")"
@@ -555,9 +557,10 @@ def confined(n, cmd, frozen=(), frozen_trees=()):
                          for d in (gate_dir, base_dir))
                # contents, not metadata: Node's realpath has to lstat the folders on the way to fnm's Node
                + "(deny file-read-data " + " ".join(f'(subpath "{quote(p)}")' for p in secrets) + ")"
-               + '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))'  # any repo's .env on this Mac
+               + '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))(allow file-read* (regex #"/\\.env\\.example$"))'  # any repo's .env on this Mac
                + f'(allow file-read-data (subpath "{quote(NODE_HOME)}"))'
-               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))'
+               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd")'
+               ' (global-name "com.apple.securityd.xpc"))'
                + NO_ESCAPE)
     # shortcut: macOS sandbox-exec only; the GitHub runner needs its own isolation.
     return ["sandbox-exec", "-p", profile, *cmd]
@@ -743,16 +746,18 @@ def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=18
            *(Path(d).resolve() for d in private_state(n).values()), Path("/dev")]
     # credentials live all over the home: deny the stores wholesale, then let OpenCode read its own
     secrets_ = [home / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc", ".npmrc",
-                                   ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents")]
+                                   ".config", "Library", ".local/share", ".docker", ".kube", ".gnupg", ".agents",
+                                   ".gemini", ".cursor", ".codeium", ".zsh_history", ".bash_history")]
     readable = [home / ".config/opencode", home / ".local/share/opencode", NODE_HOME]
     q = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
     profile = ("(version 1)(allow default)(deny file-write*)"
                "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own])
                + " ".join(f'(literal "{q(p)}")' for p in writable_files) + ")"
                "(deny file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in secrets_) + ")"
-               '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))'  # any repo's .env on this Mac
+               '(deny file-read* (regex #"/\\.env(\\.[^/]*)?$"))(allow file-read* (regex #"/\\.env\\.example$"))'  # any repo's .env on this Mac
                "(allow file-read-data " + " ".join(f'(subpath "{q(p)}")' for p in readable) + ")"
-               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))'
+               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd")'
+               ' (global-name "com.apple.securityd.xpc"))'
                + NO_ESCAPE)
     cmd = ["sandbox-exec", "-p", profile, str(OPENCODE), "run", "--pure", "--auto", "--format", "json",
            "-m", model, "--dir", str(where), prompt]
