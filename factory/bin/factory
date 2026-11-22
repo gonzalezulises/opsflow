@@ -98,7 +98,12 @@ def run(cmd, cwd=None, check=True, stdin=None, timeout=None, env=None, binary=Fa
         out, err = proc.communicate(stdin, timeout=timeout)
     except subprocess.TimeoutExpired:
         kill_group(proc.pid)
-        proc.communicate()
+        try:
+            proc.communicate(timeout=10)  # a descendant that left the group may hold the pipes open
+        except subprocess.TimeoutExpired:
+            for stream in (proc.stdout, proc.stderr):
+                stream.close()
+            proc.wait(timeout=10)
         raise
     finally:
         kill_group(proc.pid)
@@ -117,7 +122,7 @@ def gh(*args, check=True, stdin=None):
 def first_line(path):
     """First line of a job file. Opened once, without following links: a builder could aim one at a secret."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)  # a FIFO there can't block the open
     except FileNotFoundError:
         return ""
     except OSError:
@@ -770,14 +775,12 @@ def jail(writable=(), writable_files=(), readable=(), network=True):
 
 def factory_key():
     """The factory's own OpenCode Go key (Keychain `OPENCODE_FACTORY_KEY`): what a confined run can read and leak
-    is a revocable key with its own quota, not Ulises's login. Until it exists, only the Go entry of his login."""
+    is a revocable key with its own quota, never Ulises's login."""
     res = subprocess.run(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s",
                           "OPENCODE_FACTORY_KEY", "-w"], capture_output=True, text=True)
-    if res.returncode == 0 and res.stdout.strip():
-        return res.stdout.strip()
-    # shortcut: falls back to Ulises's Go login, until OPENCODE_FACTORY_KEY is in the Keychain
-    login = json.loads((Path.home() / ".local/share/opencode/auth.json").read_text())
-    return login["opencode-go"]["key"]
+    require(res.returncode == 0 and res.stdout.strip(),
+            "falta OPENCODE_FACTORY_KEY en el Keychain: sin ella OpenCode no corre (nunca con el login personal)")
+    return res.stdout.strip()
 
 
 def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=1800):

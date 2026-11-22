@@ -83,7 +83,7 @@ def clean_env(d):
 def first_line_nofollow(path):
     """The builder wrote this file: never follow a symlink it could point at a secret."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         return "sin build.md (o no es un archivo normal)"
     with os.fdopen(fd) as f:
@@ -105,14 +105,22 @@ def jailed(cmd, cwd, env, timeout):
         except (ProcessLookupError, PermissionError):
             pass
         if proc.returncode is None:
-            proc.communicate()
+            try:
+                proc.communicate(timeout=10)  # a descendant that left the group may hold the pipes open
+            except subprocess.TimeoutExpired:
+                for stream in (proc.stdout, proc.stderr):
+                    stream.close()
+                proc.wait(timeout=10)
 
 
 def opencode(model, where, prompt, writable, timeout):
     """One headless OpenCode run; returns (last text, tokens, cost, seconds, error)."""
     t0 = time.time()
     d = run_dir()
-    key = json.loads((HOME / ".local/share/opencode/auth.json").read_text())["opencode-go"]["key"]
+    found = subprocess.run(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s",
+                            "OPENCODE_FACTORY_KEY", "-w"], capture_output=True, text=True)
+    assert found.returncode == 0 and found.stdout.strip(), "falta OPENCODE_FACTORY_KEY en el Keychain"
+    key = found.stdout.strip()  # the factory's own revocable key, never the personal login
     (d / "share/opencode/auth.json").write_text(json.dumps({"opencode-go": {"type": "api", "key": key}}))
     (d / "share/opencode/auth.json").chmod(0o600)  # only the Go entry, not the whole login
     cmd = ["sandbox-exec", "-p", profile(writable, run=d), str(OPENCODE), "run", "--pure", "--auto", "--format",
