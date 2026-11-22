@@ -56,10 +56,16 @@ Reporta una línea por transición, por ejemplo `#38: gate PASS → review (code
 
 **spec.** Lanza `spec-writer`. Luego `advance <n> build`.
 
-**build.** Lanza `builder` con nombre `builder-<n>` y el encabezado, más lo de
-esta ronda: nada (ronda 1), `El gate falló: lee round-<N-1>/gate.md y gate.log`,
+**build.** `factory/bin/factory builder <n>` dice quién construye. La nota de
+esta ronda es: nada (ronda 1), `El gate falló: lee round-<N-1>/gate.md y gate.log`,
 `Revisiones con cambios en round-<N-1>/`, o `Feedback humano: lee feedback-<k>.md`.
-Si esta sesión ya lo lanzó, retómalo con SendMessage a ese nombre. Según
+- `claude`: lanza `builder` con nombre `builder-<n>`, el encabezado y la nota. Si
+  esta sesión ya lo lanzó, retómalo con SendMessage a ese nombre.
+- un modelo `opencode-go/…` (clases A y B): Bash en segundo plano
+  `factory/bin/factory build <n> <<'EOF' <nota> EOF`; imprime la primera línea de
+  `build.md`. Retomarlo es volver a correrlo con el motivo como nota.
+
+Según
 `build.md`: `STATUS: READY` → `advance <n> gate` (hace push y abre el PR);
 `STATUS: BLOCKED` → `advance <n> needs-human`. Si `advance` rechaza, retoma
 al builder una vez con el motivo; si vuelve a rechazar, para el job y avisa.
@@ -70,7 +76,7 @@ rondas, `advance <n> needs-human`.
 
 **review.** `factory/bin/factory reviewers <n>` lista las lentes y su modelo. En
 un solo mensaje, en paralelo:
-- cada lente `codex`: Bash en segundo plano `factory/bin/factory review <n> <lente>`;
+- cada lente `codex` u `opencode-go/…`: Bash en segundo plano `factory/bin/factory review <n> <lente>`;
 - cada lente de Claude (`ui`): primero `factory/bin/factory uiview <n>`, que imprime
   la ruta de una copia del commit exacto; luego el agente `reviewer-<lente>` con su
   modelo, el encabezado, `Copia: <esa ruta>` y `Puerto: <5100 + 10·(n mod 100)>`;

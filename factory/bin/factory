@@ -10,7 +10,9 @@ that justify it and refuses anything else.
   factory advance <n> <stage>   move job #n to <stage>, or refuse with the reason
   factory gate <n>              checks + acceptance on the current commit
   factory reviewers <n>         the reviews this diff requires: "<lens> <model>" lines
-  factory review <n> <lens>     run a Codex lens (code, security, approver)
+  factory builder <n>           who builds job #n: "claude" (the skill's agent) or an OpenCode model
+  factory build <n>             run the OpenCode builder for this round (the round's note on stdin)
+  factory review <n> <lens>     run a Codex or OpenCode lens (code, security, approver)
   factory uiview <n>            fresh copy of the exact commit for the UI reviewer; prints its path
   factory record <n> <lens>     stamp a Claude reviewer's file with the commit it reviewed
   factory merge <n>             apply the merge policy; merge or hand to a human
@@ -705,11 +707,77 @@ def run_gate(n):
     return verdict
 
 
+# ---------- OpenCode (maintenance: classes A and B) ----------
+
+OPENCODE = Path.home() / ".opencode/bin/opencode"
+
+
+def builder_model(job):
+    """Who builds this job: an OpenCode model for maintenance classes, Claude (the skill's agent) otherwise."""
+    return CONFIG.get("builders", {}).get(job.get("intake_class") or "", "claude")
+
+
+def opencode(n, model, where, prompt, writable=(), writable_files=(), timeout=1800):
+    """One headless OpenCode run, confined: writes only to `writable` and OpenCode's own state, no credentials.
+
+    Returns the text of its last message ("" when it left none).
+    """
+    home = Path.home().resolve()
+    own = [home / ".local/share/opencode", home / ".local/state/opencode", home / ".cache/opencode",
+           *(Path(d).resolve() for d in private_state(n).values()), Path("/dev")]
+    secrets_ = [home / p for p in (".ssh", ".codex", ".claude", ".aws", ".git-credentials", ".netrc",
+                                   "Library/Keychains", ".config/gh", ".npmrc")] + [REPO.resolve() / ".env"]
+    q = lambda p: str(p).replace("\\", "\\\\").replace('"', '\\"')
+    profile = ("(version 1)(allow default)(deny file-write*)"
+               "(allow file-write* " + " ".join(f'(subpath "{q(p)}")' for p in [*writable, *own])
+               + " ".join(f'(literal "{q(p)}")' for p in writable_files) + ")"
+               "(deny file-read* " + " ".join(f'(subpath "{q(p)}")' for p in secrets_) + ")"
+               '(deny mach-lookup (global-name "com.apple.SecurityServer") (global-name "com.apple.securityd"))')
+    cmd = ["sandbox-exec", "-p", profile, str(OPENCODE), "run", "--pure", "--auto", "--format", "json",
+           "-m", model, "--dir", str(where), prompt]
+    res = run(cmd, check=False, timeout=timeout, env=clean_env(n))  # clean_env drops OPENCODE_API_KEY: auth.json wins
+    texts, errors = [], []
+    for line in res.stdout.splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if ev.get("type") == "text":
+            texts.append(ev.get("part", {}).get("text", ""))
+        elif ev.get("type") == "error":
+            errors.append(json.dumps(ev.get("error", ev))[:300])
+    if res.returncode != 0 or errors:
+        raise Refused(f"OpenCode ({model}) falló: {(errors or [res.stderr.strip()[-300:]])[-1]}")
+    text = texts[-1].strip() if texts else ""
+    return re.sub(r"^```\w*\n(.*?)\n```$", r"\1", text, flags=re.S).strip()  # some models fence the whole answer
+
+
+def cmd_builder(n):
+    print(builder_model(load(n)))
+
+
+def cmd_build(n, note):
+    """Run the OpenCode builder for this round in the job's clone; prints the first line of build.md."""
+    job = load(n)
+    require(job["stage"] == "build", f"#{n} está en {job['stage']}, no en build")
+    model = builder_model(job)
+    require(model != "claude", f"#{n} es clase {job.get('intake_class')}: lo construye el agente builder de Claude")
+    d, c = jdir(n), clone(n)
+    body = (REPO / ".claude/agents/builder.md").read_text().split("---", 2)[2]  # main checkout: a branch can't rewrite it
+    prompt = (f"Clon: {c}. Carpeta del job: {d}/. Issue #{n}. Ronda {job['round']}. Clase {job['intake_class']}.\n"
+              + (f"{note.strip()}\n" if note.strip() else "")
+              + "Edita archivos con tu herramienta de edición; los comandos los corres dentro del clon.\n" + body)
+    opencode(n, model, c, prompt, writable=[c.resolve()], writable_files=[(d / "build.md").resolve()])
+    print(first_line(d / "build.md") or "sin build.md")
+
+
 # ---------- reviews ----------
 
 def required(job):
     """The review lenses this diff requires, with the model that runs each."""
     lenses = dict(CONFIG["reviewers"]["always"])
+    if builder_model(job) != "claude":  # reviewed by another model family than the one that built it
+        lenses.update(CONFIG["reviewers"].get("maintenance", {}))
     if any(policy.matches(p, CONFIG["ui_paths"]) for p in changed(job["issue"])):
         lenses.update(CONFIG["reviewers"]["ui"])
     return list(lenses.items())
@@ -757,8 +825,9 @@ def cmd_record(n, lens):
 
 
 def cmd_review(n, lens):
-    require(lens in {"code", "security", "approver"}, "lentes de Codex: code, security, approver")
+    require(lens in {"code", "security", "approver"}, "lentes de Codex u OpenCode: code, security, approver")
     job = load(n)
+    model = dict(required(job)).get(lens, "codex")
     d = jdir(n)
     rd = round_dir(job)
     target = d / "decision.md" if lens == "approver" else rd / f"review-{lens}.md"
@@ -774,23 +843,35 @@ def cmd_review(n, lens):
     rgit("worktree", "remove", "--force", str(view), check=False)
     shutil.rmtree(view, ignore_errors=True)
     rgit("worktree", "add", "-q", "--detach", str(view), sha)  # the factory's repo: its origin, its config
-    lock = os.open(JOBS / ".codex.lock", os.O_CREAT | os.O_RDWR)
-    fcntl.flock(lock, fcntl.LOCK_EX)  # one Codex at a time: parallel runs fight over the token
     out = rd / f"codex-{lens}.out"
-    try:
-        res = run(["codex", "exec", "--sandbox", "read-only", "--ephemeral", "-C", str(view),
-                   "-o", str(out), "-"], stdin=full, check=False, timeout=CONFIG["codex_timeout_seconds"])
-    except subprocess.TimeoutExpired:
-        res = None
-    finally:
-        os.close(lock)
-        rgit("worktree", "remove", "--force", str(view), check=False)
+    if model.startswith("opencode"):
+        try:
+            text = opencode(n, model, view, full, timeout=CONFIG["codex_timeout_seconds"])  # read-only: no writable dirs
+            res = subprocess.CompletedProcess([], 0)
+        except subprocess.TimeoutExpired:
+            text, res = "", None
+        except Refused as e:
+            text, res = "", subprocess.CompletedProcess([], 1, "", str(e))
+        finally:
+            rgit("worktree", "remove", "--force", str(view), check=False)
+        out.write_text(text + "\n")
+    else:
+        lock = os.open(JOBS / ".codex.lock", os.O_CREAT | os.O_RDWR)
+        fcntl.flock(lock, fcntl.LOCK_EX)  # one Codex at a time: parallel runs fight over the token
+        try:
+            res = run(["codex", "exec", "--sandbox", "read-only", "--ephemeral", "-C", str(view),
+                       "-o", str(out), "-"], stdin=full, check=False, timeout=CONFIG["codex_timeout_seconds"])
+        except subprocess.TimeoutExpired:
+            res = None
+        finally:
+            os.close(lock)
+            rgit("worktree", "remove", "--force", str(view), check=False)
     text = out.read_text().strip() if out.exists() else ""
     line = text.split("\n", 1)[0].strip()
     if res is None or res.returncode != 0 or not re.fullmatch(pattern, line):
         why = "tiempo agotado" if res is None else (res.stderr.strip()[-400:] or f"respuesta sin veredicto: {line[:80]!r}")
         (rd / f"codex-{lens}.err").write_text(why + "\n")
-        raise Refused(f"Codex ({lens}) no dejó un veredicto: {why}")
+        raise Refused(f"{model} ({lens}) no dejó un veredicto: {why}")
     require(fingerprint(n) == fp_before and head(n) == sha, "el cambio se modificó durante la revisión")
     inputs_intact(job)
     target.write_text(text + "\n")
@@ -941,6 +1022,8 @@ def main(argv):
         "advance": (2, lambda: cmd_advance(int(args[0]), args[1])),
         "gate": (1, lambda: cmd_gate(int(args[0]))),
         "reviewers": (1, lambda: cmd_reviewers(int(args[0]))),
+        "builder": (1, lambda: cmd_builder(int(args[0]))),
+        "build": (1, lambda: cmd_build(int(args[0]), stdin())),
         "review": (2, lambda: cmd_review(int(args[0]), args[1])),
         "record": (2, lambda: cmd_record(int(args[0]), args[1])),
         "uiview": (1, lambda: cmd_uiview(int(args[0]))),

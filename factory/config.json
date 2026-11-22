@@ -98,6 +98,10 @@
     },
     "ui": {
       "ui": "sonnet"
+    },
+    "maintenance": {
+      "code": "opencode-go/kimi-k2.7-code",
+      "security": "opencode-go/glm-5.3"
     }
   },
   "ui_paths": [
@@ -141,5 +145,9 @@
     "\\b(fetch|sendBeacon|XMLHttpRequest|WebSocket|EventSource|importScripts)\\b|\\.src\\s*=|window\\.open\\s*\\(",
     "\\bdangerouslySetInnerHTML\\b",
     "\\b(document\\.cookie|localStorage|sessionStorage)\\b"
-  ]
+  ],
+  "builders": {
+    "A": "opencode-go/minimax-m3",
+    "B": "opencode-go/minimax-m3"
+  }
 }
