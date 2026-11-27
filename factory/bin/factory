@@ -17,6 +17,8 @@ that justify it and refuses anything else.
   factory record <n> <lens>     stamp a Claude reviewer's file with the commit it reviewed
   factory merge <n>             apply the merge policy; merge or hand to a human
   factory feedback <n>          needs-human → build, with the human's words on stdin
+  factory plan <n> aprobar      an L plan waiting in needs-human → build (bound to that exact spec.md)
+  factory plan <n> ajustar      an L plan waiting in needs-human → spec, with what to change on stdin
   factory reject <n>            close the job, with the reason on stdin
   factory summary               one line per job
 """
@@ -57,7 +59,7 @@ MOVES = {
     "gate": {"review", "build", "needs-human"},
     "review": {"approve", "build", "needs-human"},
     "approve": {"needs-human"},  # APPROVE goes through `factory merge`
-    "needs-human": {"build", "rejected"},
+    "needs-human": {"build", "rejected"},  # `factory plan` also sends a waiting L plan back to spec
 }
 RUNNING = {"intake", "spec", "build", "gate", "review", "approve"}
 DONE = {"merged", "rejected"}
@@ -452,9 +454,10 @@ def cmd_advance(n, stage):
             require(large, "solo un job L espera a que una persona apruebe el plan")
             require("## Plan" in spec, "spec.md de un job L no tiene la sección `## Plan`")
             seal(job, "spec.md")
+            job["plan_waiting"] = True
             plan = spec[spec.index("## Plan"):]
             return to_human(job, "Job L: el plan espera tu aprobación antes de construir.\n\n" + plan.strip()
-                            + "\n\nApruébalo o ajústalo con feedback a la fábrica: `/factory #" + str(n) + ": <aprobado, o qué cambiar>`.")
+                            + "\n\nPara construirlo: `/factory aprobar " + str(n) + "`. Para cambiarlo: `/factory ajustar " + str(n) + " <qué cambiar>`.")
         require(not large, "un job L no se construye sin plan aprobado: `advance " + str(n) + " needs-human`")
         seal(job, "spec.md")
         next_round(job)
@@ -1006,6 +1009,8 @@ def cmd_merge(n, attempt=1):
     require(job["stage"] == "approve", f"#{n} está en {job['stage']}, no en approve")
     require(first_line(jdir(n) / "decision.md") == "APPROVE", "decision.md no dice APPROVE")
     inputs_intact(job)
+    if job.get("size") == "L" and job.get("plan_approved") != job.get("sealed", {}).get("spec.md"):
+        return to_human(job, "Job L sin el plan aprobado por una persona: no se fusiona.")
     base = base_sync()
     base_tip = rgit("rev-parse", base)
     sha = head(n)
@@ -1059,9 +1064,30 @@ def cmd_merge(n, attempt=1):
 
 # ---------- the human's moves ----------
 
+def cmd_plan(n, verb, text):
+    """Only a person's literal `aprobar` builds an L job; `ajustar` sends the plan back to spec."""
+    job = load(n)
+    require(job["stage"] == "needs-human" and job.get("plan_waiting"), f"#{n} no tiene un plan esperando")
+    require(verb in {"aprobar", "ajustar"}, "usa `plan <n> aprobar` o `plan <n> ajustar`")
+    inputs_intact(job)
+    d = jdir(n)
+    job["plan_waiting"] = False
+    label(n, remove=LABELS["needs_human"])
+    if verb == "aprobar":
+        job["plan_approved"] = job["sealed"]["spec.md"]  # the exact plan the person read
+        next_round(job)
+        return move(job, "build", "plan aprobado")
+    require(text.strip(), "no llegó por stdin qué cambiar del plan")
+    k = len(list(d.glob("feedback-*.md"))) + 1
+    (d / f"feedback-{k}.md").write_text(f"# Ajustes al plan {k}\n\n{text.strip()}\n")
+    job["sealed"].pop("spec.md", None)  # the spec-writer rewrites it
+    move(job, "spec", f"feedback-{k}.md")
+
+
 def cmd_feedback(n, text):
     job = load(n)
     require(job["stage"] == "needs-human", f"#{n} está en {job['stage']}, no en needs-human")
+    require(not job.get("plan_waiting"), f"#{n} espera la aprobación de su plan: usa `plan {n} aprobar|ajustar`")
     require(text.strip(), "no llegó feedback por stdin")
     d = jdir(n)
     k = len(list(d.glob("feedback-*.md"))) + 1
@@ -1136,6 +1162,7 @@ def main(argv):
         "uiview": (1, lambda: cmd_uiview(int(args[0]))),
         "merge": (1, lambda: cmd_merge(int(args[0]))),
         "feedback": (1, lambda: cmd_feedback(int(args[0]), stdin())),
+        "plan": (2, lambda: cmd_plan(int(args[0]), args[1], stdin() if args[1] == "ajustar" else "")),
         "reject": (1, lambda: cmd_reject(int(args[0]), stdin())),
         "summary": (0, lambda: cmd_summary()),
     }

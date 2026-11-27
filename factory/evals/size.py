@@ -82,8 +82,16 @@ with tempfile.TemporaryDirectory() as tmp:
     F.cmd_advance(3, "needs-human")
     check("L con plan espera a una persona y publica el plan",
           F.load(3)["stage"] == "needs-human" and "tocar vsm.ts" in posted[-1])
-    F.cmd_feedback(3, "aprobado")
-    check("el feedback aprobado lo lleva a build, ronda 1", (F.load(3)["stage"], F.load(3)["round"]) == ("build", 1))
+    check("un feedback cualquiera no construye un plan L", refused(lambda: F.cmd_feedback(3, "NO apruebo, no construyas")))
+    F.cmd_plan(3, "ajustar", "otra alternativa")
+    check("ajustar devuelve el plan a spec", F.load(3)["stage"] == "spec")
+    (F.jdir(3) / "spec.md").write_text("# t\n\n## Acceptance\n1. x\n\n## Plan\n- plan dos\n")
+    F.cmd_advance(3, "needs-human")
+    F.cmd_plan(3, "aprobar", "")
+    j = F.load(3)
+    check("aprobar lo lleva a build, ronda 1, atado al plan que se leyó",
+          (j["stage"], j["round"]) == ("build", 1) and j["plan_approved"] == j["sealed"]["spec.md"])
+    check("un plan aprobado no se vuelve a aprobar", refused(lambda: F.cmd_plan(3, "aprobar", "")))
 
     job(4, "ACCEPT\nClass: A\nSize: M\n\n## Resumen\n- x\n")
     F.cmd_advance(4, "spec")

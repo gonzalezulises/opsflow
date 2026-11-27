@@ -15,6 +15,7 @@ dice por qué. Corrige la causa o para y avisa. No le busques la vuelta.
 /factory run          vacía la cola: cada issue abierto con `factory`; también retoma lo cortado
 /factory run <n>      corre solo el issue #n
 /factory retro        una vez al mes: por qué fallaron las rondas y qué se repite
+/factory aprobar <n>  construir el plan de un job L; /factory ajustar <n> <texto>: rehacerlo
 /factory <texto>      pregunta, feedback, rechazo o función nueva
 ```
 
@@ -56,8 +57,11 @@ Reporta una línea por transición, por ejemplo `#38: gate PASS → review (code
 `factory/bin/factory advance <n> spec`, `... needs-info` o `... rejected`.
 
 **spec.** Lanza `spec-writer`. Luego `advance <n> build`; si el job es L (`Size: L` en
-`intake.md`), `advance <n> needs-human`: publica el plan en el issue y el job espera. El
-feedback de la persona («aprobado» o lo que cambia) lo lleva a build como cualquier feedback.
+`intake.md`), `advance <n> needs-human`: publica el plan en el issue y el job espera. Solo una
+persona lo mueve: `/factory aprobar <n>` → `factory/bin/factory plan <n> aprobar` (va a build);
+`/factory ajustar <n> <texto>` → `factory/bin/factory plan <n> ajustar <<'EOF' <texto> EOF`
+(vuelve a spec: relanza el spec-writer con la nota `Ajustes al plan: lee feedback-<k>.md`).
+Nunca traduzcas otro texto en `aprobar`: si no dice literalmente `aprobar`, es `ajustar` o nada.
 Un job S se revisa solo con la lente de código mientras su clase sea A.
 
 **build.** `factory/bin/factory builder <n>` dice quién construye. La nota de
