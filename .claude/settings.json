@@ -1,5 +1,64 @@
 {
   "sandbox": {
-    "enabled": false
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": [
+      "factory/bin/factory *",
+      "gh issue create *"
+    ],
+    "filesystem": {
+      "allowWrite": [
+        "~/.npm",
+        "~/Library/Caches"
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com"
+      ],
+      "allowLocalBinding": true
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Agent",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(factory/bin/factory *)",
+      "Bash(factory/bin/retro)",
+      "Bash(factory/bin/retro *)",
+      "mcp__playwright__*",
+      "Bash(gh issue create *)"
+    ],
+    "deny": [
+      "Edit(factory/lib/**)",
+      "Edit(factory/bin/**)",
+      "Edit(factory/prompts/**)",
+      "Edit(factory/config.json)",
+      "Edit(factory/checks.sh)",
+      "Edit(.claude/**)",
+      "Edit(factory/jobs/*/job.json)",
+      "Edit(factory/jobs/*/decision.*)",
+      "Edit(factory/jobs/*/round-*/*.json)",
+      "Edit(factory/jobs/*/round-*/gate.*)",
+      "Edit(factory/jobs/*/round-*/review-code.*)",
+      "Edit(factory/jobs/*/round-*/review-security.*)",
+      "Edit(factory/jobs/*/round-*/codex-*)",
+      "Bash(git push*)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(gh repo *)",
+      "Bash(gh secret *)",
+      "Bash(gh variable *)",
+      "Bash(gh workflow *)",
+      "Bash(vercel *)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
   }
 }

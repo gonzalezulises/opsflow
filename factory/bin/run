@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""Run the factory once, unattended: `claude -p "/factory run"` in this checkout.
+
+Usage: run [--manual]
+
+One run at a time per repo (an OS lock: a dead run releases it, and the next
+run resumes from the job files). Runs only when the repo variable
+FACTORY_RUNNER is "mac", unless called with --manual. The factory's own files
+always come from main: the checkout must be clean and is fast-forwarded first.
+"""
+
+import fcntl
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
+JOBS = REPO / "factory" / "jobs"
+MAX_SECONDS = 3 * 3600  # shortcut: one cap per run; per-job budgets come with cost tracking
+
+
+def sh(*cmd):
+    return subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
+
+
+def main(argv):
+    if "--manual" not in argv:
+        mode = sh("gh", "variable", "get", "FACTORY_RUNNER").stdout.strip() or "off"
+        if mode != "mac":
+            print(f"FACTORY_RUNNER={mode}: no corre en la Mac")
+            return 0
+    if sh("git", "status", "--porcelain", "--untracked-files=no").stdout.strip():
+        print("el checkout tiene cambios: no corre")
+        return 1
+    if sh("git", "fetch", "-q", "origin", "main").returncode or sh("git", "merge", "-q", "--ff-only", "origin/main").returncode:
+        print("no se pudo actualizar main: no corre")
+        return 1
+    JOBS.mkdir(parents=True, exist_ok=True)
+    lock = open(JOBS / ".run.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("ya hay una corrida en curso")
+        return 0
+    log = JOBS / f"run-{time.strftime('%Y%m%d-%H%M%S')}.log"
+    claude = os.environ.get("CLAUDE_BIN", "claude")
+    with open(log, "w") as out:
+        # Claude gets its own process group, so stopping the run ends claude AND its agents,
+        # gates and Codex runs. It also inherits the lock: if this runner is killed outright,
+        # the lock stays held until the last of them exits, so no second run overlaps.
+        os.set_inheritable(lock.fileno(), True)
+        proc = subprocess.Popen([claude, "-p", "/factory run", "--model", "opus"], cwd=REPO,
+                                stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                                start_new_session=True, pass_fds=(lock.fileno(),))
+
+        def stop(signum, _frame):
+            os.killpg(proc.pid, signal.SIGKILL)
+            sys.exit(128 + signum)
+
+        signal.signal(signal.SIGTERM, stop)
+        signal.signal(signal.SIGINT, stop)
+        try:
+            code = proc.wait(timeout=MAX_SECONDS)
+        except subprocess.TimeoutExpired:
+            out.write(f"\nfactory run: cortada a las {MAX_SECONDS // 3600} h\n")
+            code = 124
+        finally:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # leftovers of a finished run die too
+            except ProcessLookupError:
+                pass
+            proc.wait()
+    print("\n".join(log.read_text().splitlines()[-20:]))
+    if code:
+        print(f"la corrida terminó con código {code}: {log}")
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

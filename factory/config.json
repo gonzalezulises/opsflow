@@ -1,6 +1,4 @@
 {
-  "concurrency": 1,
-  "max_rounds": 3,
   "base_branch": "main",
   "merge_method": "squash",
   "labels": {
@@ -8,73 +6,149 @@
     "needs_info": "factory:needs-info",
     "needs_human": "factory:needs-human"
   },
-  "routing": {
-    "low": {
-      "code": "codex"
-    },
-    "medium": {
-      "code": "codex"
-    },
-    "high": {
-      "code": "codex"
-    }
+  "max_rounds": 3,
+  "concurrency": 1,
+  "max_jobs_per_day": 5,
+  "codex_timeout_seconds": 900,
+  "classes": {
+    "D": [
+      "factory/*",
+      ".claude/*",
+      ".github/*",
+      ".husky/*",
+      ".githooks/*",
+      "lefthook.yml",
+      ".lefthook*",
+      ".npmrc",
+      "*.gitattributes",
+      "vitest.config.*",
+      "eslint.config.*",
+      "tsconfig.json",
+      "postcss.config.*",
+      ".codex/*",
+      ".cursor/*",
+      ".yarnrc*",
+      ".pnpmfile.cjs",
+      "*AGENTS*.md",
+      "*CLAUDE*.md"
+    ],
+    "C": [
+      "src/server/auth/*",
+      "src/server/db/*",
+      "src/server/ai/*",
+      "src/server/email/*",
+      "src/server/lib/admin-api-route.ts",
+      "src/app/api/*",
+      "src/app/auth/*",
+      "src/app/(app)/invite/*",
+      "src/app/(app)/organization/*",
+      "src/lib/supabase/*",
+      "supabase/*",
+      "drizzle.config.ts",
+      "vercel.json",
+      "vercel.ts",
+      "next.config.*",
+      "src/proxy.*",
+      "proxy.*",
+      "src/middleware.*",
+      "middleware.*",
+      "instrumentation*",
+      "src/instrumentation*",
+      "sentry.*.config.*",
+      "npm-shrinkwrap.json",
+      "src/lib/organization-settings.ts",
+      "*permission*",
+      "*roles*",
+      "*membership*",
+      "src/pages/api/*",
+      "src/app/*/actions.ts",
+      "src/app/*route.ts",
+      "src/app/*route.tsx",
+      "src/app/*route.js",
+      "src/app/*route.jsx",
+      "src/app/(app)/dashboard/layout.tsx",
+      "src/app/(app)/layout.tsx",
+      "src/server/actions/*",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+      "bun.lock",
+      "bun.lockb",
+      "src/features/auth/*"
+    ]
   },
-  "surface_reviewers": {
-    "ui": {
-      "ux": "sonnet",
-      "ui": "haiku"
-    },
-    "security": {
-      "security": "codex"
-    }
-  },
-  "protected_paths": [
-    "factory/checks.sh",
-    "factory/config.json",
-    "factory/bin/*",
-    ".claude/agents/*",
-    ".claude/skills/factory/*"
+  "tests": [
+    "*.test.ts",
+    "*.test.tsx"
   ],
-  "ports": {
-    "base": 5100,
-    "step": 10
-  },
-  "prices_usd_per_mtok": {
-    "claude-fable-5-1": {
-      "input": 10.0,
-      "output": 50.0,
-      "cache_write_5m": 12.5,
-      "cache_write_1h": 20.0,
-      "cache_read": 0.25
+  "acceptance_exempt": [
+    "package.json",
+    "package-lock.json",
+    "*.md",
+    "docs/*"
+  ],
+  "acceptance_cmd": [
+    "npx",
+    "vitest",
+    "run"
+  ],
+  "reviewers": {
+    "always": {
+      "code": "codex",
+      "security": "codex"
     },
-    "claude-opus-5-5": {
-      "input": 4.0,
-      "output": 20.0,
-      "cache_write_5m": 5.0,
-      "cache_write_1h": 8.0,
-      "cache_read": 0.2
+    "ui": {
+      "ui": "sonnet"
     },
-    "claude-sonnet-5-5": {
-      "input": 2.0,
-      "output": 10.0,
-      "cache_write_5m": 2.5,
-      "cache_write_1h": 4.0,
-      "cache_read": 0.2
-    },
-    "claude-haiku-5-5": {
-      "input": 0.1,
-      "output": 0.5,
-      "cache_write_5m": 0.125,
-      "cache_write_1h": 0.2,
-      "cache_read": 0.01
-    },
-    "claude-fable-5-2": {
-      "input": 8.0,
-      "output": 40.0,
-      "cache_write_5m": 10.0,
-      "cache_write_1h": 16.0,
-      "cache_read": 0.2
+    "maintenance": {
+      "code": "opencode/nemotron-3.5-lightning-free",
+      "security": "opencode/nemotron-3.5-lightning-free"
     }
   },
-  "codex_timeout_seconds": 900
+  "ui_paths": [
+    "src/app/*.tsx",
+    "src/components/*",
+    "src/features/*.tsx",
+    "src/app/globals.css"
+  ],
+  "gate_outputs": [
+    "next-env.d.ts"
+  ],
+  "autonomous": [
+    "src/lib/calculations/*",
+    "src/lib/constants/*",
+    "src/lib/utils.ts",
+    "src/hooks/*",
+    "src/components/*",
+    "src/features/*/components/*",
+    "*.test.ts",
+    "*.test.tsx",
+    "docs/*",
+    "README.md",
+    "CHANGELOG.md",
+    "package.json",
+    "package-lock.json",
+    "public/*.png",
+    "public/*.jpg",
+    "public/*.jpeg",
+    "public/*.gif",
+    "public/*.webp",
+    "public/*.avif",
+    "public/*.ico",
+    "public/*.woff",
+    "public/*.woff2"
+  ],
+  "sensitive_content": [
+    "[\"']use server[\"']",
+    "from\\s+[\"'](@/server/(?!actions/)|@/lib/supabase|@/lib/organization-settings)",
+    "from\\s+[\"'](drizzle-orm|postgres|@supabase/|openai|server-only)",
+    "\\bprocess\\.env\\b",
+    "\\b(fetch|sendBeacon|XMLHttpRequest|WebSocket|EventSource|importScripts)\\b|\\.src\\s*=|window\\.open\\s*\\(",
+    "\\bdangerouslySetInnerHTML\\b",
+    "\\b(document\\.cookie|localStorage|sessionStorage)\\b"
+  ],
+  "builders": {
+    "A": "opencode/big-pickle",
+    "B": "opencode/big-pickle"
+  },
+  "allow_free_models": true
 }
