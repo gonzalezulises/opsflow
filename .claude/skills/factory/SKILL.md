@@ -125,7 +125,8 @@ menor va como nota en el resumen final.
 
 ## /factory retro
 
-Corre `factory/bin/retro --since <hace 30 días>` y lee el reporte. Si la misma clase de
+La Mac la corre sola el día 1 de cada mes a las 9:00 (launchd `com.ulises.factory-retro`, log en
+`~/Library/Logs/factory-retro.log`). Corre `factory/bin/retro --since <hace 30 días>` y lee el reporte. Si la misma clase de
 hallazgo aparece en dos o más jobs (la misma lente pidiendo lo mismo, el gate cayendo por lo
 mismo), propón la regla o el lint que la habría frenado, como issue **sin** label `factory`
 (cambiar reglas, agentes o lint es clase D: lo decide una persona). Si nada se repite, dilo en
