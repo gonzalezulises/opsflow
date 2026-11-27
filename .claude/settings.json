@@ -30,6 +30,8 @@
       "Glob",
       "Grep",
       "Bash(factory/bin/factory *)",
+      "Bash(factory/bin/retro)",
+      "Bash(factory/bin/retro *)",
       "mcp__playwright__*",
       "Bash(gh issue create *)"
     ],
