@@ -52,7 +52,7 @@ MARK = "<!-- factory -->"
 MOVES = {
     "intake": {"spec", "needs-info", "rejected"},
     "needs-info": {"intake", "rejected"},
-    "spec": {"build"},
+    "spec": {"build", "needs-human"},  # needs-human: an L job waits for its plan to be approved
     "build": {"gate", "needs-human"},
     "gate": {"review", "build", "needs-human"},
     "review": {"approve", "build", "needs-human"},
@@ -421,8 +421,12 @@ def cmd_advance(n, stage):
         summary = text.split("\n", 1)[1].strip()
         m = re.search(r"^Class:\s*([ABCD])\b", text, re.M)
         job["intake_class"] = m.group(1) if m else None
+        size = re.search(r"^Size:\s*([SML])\b", text, re.M)
         if stage == "spec":
             require(m, "intake.md no tiene la línea `Class: A|B|C|D`")
+            require(size, "intake.md no tiene la línea `Size: S|M|L`")
+            # S only shortens the review of a reversible fix; anything else is reviewed in full
+            job["size"] = "M" if size.group(1) == "S" and m.group(1) != "A" else size.group(1)
             seal(job, "intake.md")
             make_clone(job)
             comment("issue", n, f"La fábrica tomó este issue (clase {m.group(1)}).\n\n{summary}")
@@ -443,6 +447,15 @@ def cmd_advance(n, stage):
     elif old == "spec":
         spec = (d / "spec.md").read_text() if (d / "spec.md").exists() else ""
         require("## Acceptance" in spec, "spec.md no tiene la sección `## Acceptance`")
+        large = job.get("size") == "L"
+        if stage == "needs-human":
+            require(large, "solo un job L espera a que una persona apruebe el plan")
+            require("## Plan" in spec, "spec.md de un job L no tiene la sección `## Plan`")
+            seal(job, "spec.md")
+            plan = spec[spec.index("## Plan"):]
+            return to_human(job, "Job L: el plan espera tu aprobación antes de construir.\n\n" + plan.strip()
+                            + "\n\nApruébalo o ajústalo con feedback a la fábrica: `/factory #" + str(n) + ": <aprobado, o qué cambiar>`.")
+        require(not large, "un job L no se construye sin plan aprobado: `advance " + str(n) + " needs-human`")
         seal(job, "spec.md")
         next_round(job)
 
@@ -870,6 +883,10 @@ def required(job):
         lenses.update(CONFIG["reviewers"].get("maintenance", {}))
     if any(policy.matches(p, CONFIG["ui_paths"]) for p in changed(job["issue"])):
         lenses.update(CONFIG["reviewers"]["ui"])
+    # S: one code review. Only while the class is A; once `merge` classifies the diff as anything
+    # else, security is required again and its missing review sends the job to a person.
+    if job.get("size") == "S" and job.get("class", job.get("intake_class")) == "A":
+        lenses.pop("security", None)
     return list(lenses.items())
 
 
