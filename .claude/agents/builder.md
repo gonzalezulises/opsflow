@@ -28,7 +28,8 @@ Lee `AGENTS.md` del clon, `spec.md`, y lo que corresponda a esta ronda:
    del repo.
 3. Corre `npm run lint`, `npm run typecheck` y las pruebas. El gate corre
    `factory/checks.sh` completo después.
-4. Commitea en el branch del job con mensajes convencionales en inglés. No hagas
+4. Commitea en el branch del job con mensajes convencionales en inglés y el trailer
+   `Implemented-by: factory-builder` (el hook global de commits lo exige). No hagas
    push: lo hace la fábrica.
 
 No toques `factory/`, `.claude/`, `.github/`, `AGENTS.md` ni `CLAUDE.md`, salvo
