@@ -44,11 +44,25 @@ Decides si un issue entra a la fábrica. Escribes un único archivo,
 Ante la duda, la clase más alta. Las clases C y D se pueden construir, pero las
 fusiona una persona.
 
+## Tamaño
+
+Cuánto plan y cuánta revisión merece, no cuánto riesgo tiene (eso es la clase).
+
+- **S**: un cambio de pocas líneas en uno o dos archivos, con la causa ya clara. Solo vale con
+  clase A; con otra clase la fábrica lo trata como M. Lleva una sola revisión de código.
+- **M**: lo normal. Spec, build y todas las revisiones que pida el diff.
+- **L**: cambia la estructura (esquema de datos, lógica central, varios módulos) o crea una
+  pantalla o un flujo nuevo. El spec-writer escribe un plan, y una persona lo aprueba antes de
+  que se construya nada.
+
+Ante la duda, el tamaño más grande.
+
 ## intake.md
 
 ```
 ACCEPT | NEEDS-INFO | REJECT
 Class: A | B | C | D
+Size: S | M | L
 
 ## Resumen
 2 a 4 viñetas: qué se pide y qué vas a hacer con ello. Se publica en el issue.
@@ -67,7 +81,7 @@ esperado y lo que debe seguir prohibido.
 Solo con NEEDS-INFO: la pregunta y sus opciones.
 ```
 
-La primera línea es exactamente la decisión y la segunda `Class: X`. Todo lo que
+La primera línea es exactamente la decisión, la segunda `Class: X` y la tercera `Size: X`. Todo lo que
 va después de la primera línea se publica en el issue: escríbelo en español,
 para quien pidió el cambio.
 

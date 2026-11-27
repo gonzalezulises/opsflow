@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Retro de la fábrica: por qué falló cada ronda y dónde terminó cada job, leído de factory/jobs/.
+
+No cambia nada. Lo repetido (la misma clase de hallazgo en dos o más jobs) es candidato a regla
+del repo o a lint: eso lo decide quien lee, una vez al mes, con `/factory retro`.
+
+Uso: factory/bin/retro [--since AAAA-MM-DD] [carpeta de jobs]
+"""
+
+import json
+import re
+import sys
+from pathlib import Path
+
+
+def first(path):
+    return path.read_text().splitlines()[0].strip() if path.exists() and path.stat().st_size else ""
+
+
+def finding(review):
+    """La primera viñeta de `## Hallazgos`: el porqué de un CHANGES en una línea."""
+    text = review.read_text()
+    m = re.search(r"^## Hallazgos\s*\n(?:\s*\n)*-\s*(.+)$", text, re.M)
+    return (m.group(1) if m else "(sin viñeta en ## Hallazgos)")[:220]
+
+
+def gate_reason(gate):
+    lines = [l.strip() for l in gate.read_text().splitlines()[1:] if l.strip()]
+    return (lines[0] if lines else "(gate.md sin detalle)")[:220]
+
+
+def retro(jobs_dir, since=""):
+    jobs = []
+    for f in sorted(jobs_dir.glob("*/job.json"), key=lambda p: int(p.parent.name) if p.parent.name.isdigit() else 0):
+        job = json.loads(f.read_text())
+        if job.get("created", "")[:10] >= since:
+            jobs.append((f.parent, job))
+    failed, ended, counts = [], [], {}
+    for d, job in jobs:
+        n = job["issue"]
+        for rd in sorted(d.glob("round-*"), key=lambda p: int(p.name.split("-")[1])):
+            r = rd.name.split("-")[1]
+            gate = rd / "gate.md"
+            if gate.exists():
+                ok = first(gate) == "GATE: PASS"
+                counts.setdefault("gate", [0, 0])[0] += 1
+                if not ok:
+                    counts["gate"][1] += 1
+                    failed.append(f"- #{n} ronda {r} · gate FAIL: {gate_reason(gate)}")
+            for review in sorted(rd.glob("review-*.md")):
+                lens = review.stem.removeprefix("review-")
+                counts.setdefault(lens, [0, 0])[0] += 1
+                if first(review) != "VERDICT: PASS":
+                    counts[lens][1] += 1
+                    failed.append(f"- #{n} ronda {r} · {lens} {first(review).removeprefix('VERDICT: ')}: {finding(review)}")
+        if job["stage"] != "merged":
+            why = (job.get("history") or [{}])[-1].get("note", "")
+            ended.append(f"- #{n} {job['stage']}" + (f": {why}" if why else ""))
+    merged = sum(1 for _, j in jobs if j["stage"] == "merged")
+    out = [f"# Retro de la fábrica: {len(jobs)} jobs" + (f" desde {since}" if since else ""), "",
+           f"Fusionados solos: {merged} de {len(jobs)}.", "", "## Rondas que no pasaron", ""]
+    out += failed or ["- Ninguna."]
+    out += ["", "## Jobs que no se fusionaron solos", ""] + (ended or ["- Ninguno."])
+    out += ["", "## Tasa de rechazo por etapa", ""]
+    out += [f"- {k}: {bad} de {total}" for k, (total, bad) in sorted(counts.items())] or ["- Sin rondas."]
+    return "\n".join(out) + "\n"
+
+
+def main(argv):
+    since = ""
+    if argv[:1] == ["--since"]:
+        since, argv = argv[1], argv[2:]
+    jobs_dir = Path(argv[0]) if argv else Path(__file__).resolve().parents[1] / "jobs"
+    sys.stdout.write(retro(jobs_dir, since))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

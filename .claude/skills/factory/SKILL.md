@@ -14,14 +14,16 @@ dice por qué. Corrige la causa o para y avisa. No le busques la vuelta.
 ```
 /factory run          vacía la cola: cada issue abierto con `factory`; también retoma lo cortado
 /factory run <n>      corre solo el issue #n
+/factory retro        una vez al mes: por qué fallaron las rondas y qué se repite
+/factory aprobar <n>  construir el plan de un job L; /factory ajustar <n> <texto>: rehacerlo
 /factory <texto>      pregunta, feedback, rechazo o función nueva
 ```
 
 ## Pipeline
 
 ```
-intake        agente: ACCEPT / NEEDS-INFO / REJECT + clase A-D
-spec          agente: spec.md con ## Acceptance
+intake        agente: ACCEPT / NEEDS-INFO / REJECT + clase A-D + tamaño S/M/L
+spec          agente: spec.md con ## Acceptance (y ## Plan si es L: lo aprueba una persona)
 build         agente builder en el clon; la fábrica hace push y abre el PR
 gate          script: checks.sh + prueba de aceptación (falla sin el cambio, pasa con él)
 review        lentes que pide el diff: Codex code y security; Claude ui si toca pantallas
@@ -54,7 +56,13 @@ Reporta una línea por transición, por ejemplo `#38: gate PASS → review (code
 **intake.** Lanza `intake`. Según la primera línea de `intake.md`:
 `factory/bin/factory advance <n> spec`, `... needs-info` o `... rejected`.
 
-**spec.** Lanza `spec-writer`. Luego `advance <n> build`.
+**spec.** Lanza `spec-writer`. Luego `advance <n> build`; si el job es L (`Size: L` en
+`intake.md`), `advance <n> needs-human`: publica el plan en el issue y el job espera. Solo una
+persona lo mueve: `/factory aprobar <n>` → `factory/bin/factory plan <n> aprobar` (va a build);
+`/factory ajustar <n> <texto>` → `factory/bin/factory plan <n> ajustar <<'EOF' <texto> EOF`
+(vuelve a spec: relanza el spec-writer con la nota `Ajustes al plan: lee feedback-<k>.md`).
+Nunca traduzcas otro texto en `aprobar`: si no dice literalmente `aprobar`, es `ajustar` o nada.
+Un job S se revisa solo con la lente de código mientras su clase sea A.
 
 **build.** `factory/bin/factory builder <n>` dice quién construye. La nota de
 esta ronda es: nada (ronda 1), `El gate falló: lee round-<N-1>/gate.md y gate.log`,
@@ -114,6 +122,14 @@ menor va como nota en el resumen final.
 4. Cuando un job termina, vuelve a correr `queue`.
 5. Al final, `factory/bin/factory summary` y la lista de lo que espera a una
    persona: PRs en `needs-human` y preguntas en `needs-info`.
+
+## /factory retro
+
+Corre `factory/bin/retro --since <hace 30 días>` y lee el reporte. Si la misma clase de
+hallazgo aparece en dos o más jobs (la misma lente pidiendo lo mismo, el gate cayendo por lo
+mismo), propón la regla o el lint que la habría frenado, como issue **sin** label `factory`
+(cambiar reglas, agentes o lint es clase D: lo decide una persona). Si nada se repite, dilo en
+una línea.
 
 ## /factory <texto>
 
